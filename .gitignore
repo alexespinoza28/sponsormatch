@@ -1,0 +1,27 @@
+# secrets: Alex fills .env; only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# private planning notes and credit codes (see ../CLAUDE.md)
+RESOURCES.md
+
+# deps / build
+node_modules/
+dist/
+build/
+.vercel/
+__pycache__/
+*.pyc
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+coverage/
+
+# misc
+.DS_Store
+*.log
+npm-debug.log*

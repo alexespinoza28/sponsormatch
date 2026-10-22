@@ -1,0 +1,23 @@
+{
+  "success": true,
+  "duration": 0.04,
+  "results": [
+    {
+      "name": "The Fixture Tones",
+      "entity_id": "0A1B2C3D-0000-4000-A000-000000000001",
+      "type": "urn:entity",
+      "subtype": "urn:entity:artist",
+      "popularity": 0.912,
+      "disambiguation": "Synthetic test band",
+      "properties": { "short_description": "Synthetic indie band used in tests" },
+      "tags": [{ "id": "urn:tag:genre:music:indie_rock", "name": "Indie Rock", "type": "urn:tag:genre:music" }]
+    },
+    {
+      "name": "Fixture Tones Revival",
+      "entity_id": "0A1B2C3D-0000-4000-A000-000000000002",
+      "type": "urn:entity",
+      "subtype": "urn:entity:artist",
+      "popularity": 0.211
+    }
+  ]
+}

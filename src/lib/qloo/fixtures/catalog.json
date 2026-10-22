@@ -1,0 +1,1179 @@
+{
+  "_note": "SYNTHETIC FIXTURE DATA for SponsorMatch mock mode. Every brand, ID, score and place here is invented; none of it is Qloo data. Shapes follow the public Qloo docs (results.entities[] with name, entity_id, type, subtype, properties, popularity, tags[]; results.tags[] with tag_id, name, types, subtype, tag_value).",
+  "brands": [
+    {
+      "name": "Tidewater Cold Brew",
+      "entity_id": "FD58C482-51C7-41BB-A349-07488603DE5F",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Small-batch cold brew coffee sold in cans and at coastal cafes.",
+        "industry_categories": [
+          "Food Beverage",
+          "Coffee"
+        ],
+        "brand_personality": [
+          "laid-back",
+          "artisanal",
+          "coastal"
+        ],
+        "use_occasions": [
+          "morning commutes",
+          "farmers markets",
+          "outdoor concerts"
+        ],
+        "target_audience": [
+          "young adults",
+          "creatives"
+        ],
+        "psychographic_segments": [
+          "third-wave coffee fans",
+          "festival goers"
+        ],
+        "price_tier": [
+          "medium_end"
+        ]
+      },
+      "popularity": 0.71,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:food_and_beverage",
+          "name": "Food & Beverage",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:food_and_beverage:coffee",
+          "name": "Coffee",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:artisanal",
+          "name": "Artisanal",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:indie",
+          "name": "Indie",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Saltline Surf Supply",
+      "entity_id": "DBD156F1-B010-4D80-AAE5-1E9D9951C5A7",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Surfboards, wetsuits and beach apparel from a California surf shop chain.",
+        "industry_categories": [
+          "Retail",
+          "Sporting Goods",
+          "Apparel"
+        ],
+        "brand_personality": [
+          "adventurous",
+          "coastal",
+          "casual"
+        ],
+        "use_occasions": [
+          "beach days",
+          "surf trips",
+          "summer events"
+        ],
+        "target_audience": [
+          "teens",
+          "young adults"
+        ],
+        "psychographic_segments": [
+          "surfers",
+          "outdoor enthusiasts"
+        ],
+        "price_tier": [
+          "medium_end"
+        ]
+      },
+      "popularity": 0.64,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:retail",
+          "name": "Retail",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:fashion",
+          "name": "Fashion",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:outdoorsy",
+          "name": "Outdoorsy",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:youthful",
+          "name": "Youthful",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Ridgeback Outdoor",
+      "entity_id": "750BEA8B-A4F6-4FEF-A9A7-BD673EC09B47",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Technical outerwear and camping gear with a repair-and-reuse program.",
+        "industry_categories": [
+          "Apparel",
+          "Outdoor Recreation"
+        ],
+        "brand_personality": [
+          "rugged",
+          "sustainable",
+          "practical"
+        ],
+        "use_occasions": [
+          "hiking",
+          "camping",
+          "music festivals"
+        ],
+        "target_audience": [
+          "adults 25-44"
+        ],
+        "psychographic_segments": [
+          "outdoor enthusiasts",
+          "eco-conscious consumers"
+        ],
+        "price_tier": [
+          "high_end"
+        ]
+      },
+      "popularity": 0.82,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:fashion",
+          "name": "Fashion",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:retail",
+          "name": "Retail",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:outdoorsy",
+          "name": "Outdoorsy",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:eco_friendly",
+          "name": "Eco-Friendly",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Lumen Audio",
+      "entity_id": "10CB13B4-EB9D-46C3-AE07-9537652705E8",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Wireless headphones and portable speakers tuned for live-music fans.",
+        "industry_categories": [
+          "Consumer Electronics",
+          "Audio"
+        ],
+        "brand_personality": [
+          "sleek",
+          "innovative",
+          "music-first"
+        ],
+        "use_occasions": [
+          "commuting",
+          "concerts and events",
+          "home listening"
+        ],
+        "target_audience": [
+          "young adults",
+          "music fans"
+        ],
+        "psychographic_segments": [
+          "audiophiles",
+          "concert goers"
+        ],
+        "price_tier": [
+          "high_end"
+        ]
+      },
+      "popularity": 0.88,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:electronics",
+          "name": "Electronics",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:electronics:headphones",
+          "name": "Headphones",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:premium",
+          "name": "Premium",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:innovative",
+          "name": "Innovative",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Voltway EV",
+      "entity_id": "E6B9E160-1AB4-4A22-AE19-80E589E154B0",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Compact electric vehicles and a home-charging subscription.",
+        "industry_categories": [
+          "Automotive",
+          "Electric Vehicles"
+        ],
+        "brand_personality": [
+          "forward-looking",
+          "clean",
+          "smart"
+        ],
+        "use_occasions": [
+          "daily commuting",
+          "road trips"
+        ],
+        "target_audience": [
+          "adults 30-54"
+        ],
+        "psychographic_segments": [
+          "early adopters",
+          "eco-conscious consumers"
+        ],
+        "price_tier": [
+          "high_end"
+        ]
+      },
+      "popularity": 0.79,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:automotive",
+          "name": "Automotive",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:automotive:electric",
+          "name": "Electric",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:innovative",
+          "name": "Innovative",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:eco_friendly",
+          "name": "Eco-Friendly",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Kettle & Kiln Kombucha",
+      "entity_id": "690985E0-31F1-41E2-A53C-C598E9F60BEB",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Organic kombucha brewed in small batches with local fruit.",
+        "industry_categories": [
+          "Food Beverage",
+          "Beverages"
+        ],
+        "brand_personality": [
+          "wholesome",
+          "playful",
+          "local"
+        ],
+        "use_occasions": [
+          "yoga classes",
+          "farmers markets",
+          "outdoor concerts"
+        ],
+        "target_audience": [
+          "young adults",
+          "wellness seekers"
+        ],
+        "psychographic_segments": [
+          "health-conscious consumers"
+        ],
+        "price_tier": [
+          "medium_end"
+        ]
+      },
+      "popularity": 0.58,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:food_and_beverage",
+          "name": "Food & Beverage",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:artisanal",
+          "name": "Artisanal",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:eco_friendly",
+          "name": "Eco-Friendly",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:healthy",
+          "name": "Healthy",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Northfork Hard Cider",
+      "entity_id": "AA9444B0-1FDE-4D10-A407-037ED5D0AF8F",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Dry hard ciders from a family orchard, sold in taprooms and grocery.",
+        "industry_categories": [
+          "Alcoholic Beverages",
+          "Cider"
+        ],
+        "brand_personality": [
+          "rustic",
+          "friendly",
+          "heritage"
+        ],
+        "use_occasions": [
+          "backyard parties",
+          "music festivals",
+          "harvest season"
+        ],
+        "target_audience": [
+          "adults 25-44"
+        ],
+        "psychographic_segments": [
+          "craft beverage fans"
+        ],
+        "price_tier": [
+          "medium_end"
+        ]
+      },
+      "popularity": 0.61,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:wine_and_spirits",
+          "name": "Wine & Spirits",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:artisanal",
+          "name": "Artisanal",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:nostalgic",
+          "name": "Nostalgic",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Paloma Agave Spirits",
+      "entity_id": "4F408A0B-885C-4FD1-A571-6BBF7A2C68DD",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Blanco and reposado tequila positioned for cocktails and nightlife.",
+        "industry_categories": [
+          "Alcoholic Beverages",
+          "Spirits"
+        ],
+        "brand_personality": [
+          "vibrant",
+          "social",
+          "premium"
+        ],
+        "use_occasions": [
+          "nightlife",
+          "concerts and events",
+          "celebrations"
+        ],
+        "target_audience": [
+          "adults 25-34"
+        ],
+        "psychographic_segments": [
+          "nightlife regulars",
+          "cocktail enthusiasts"
+        ],
+        "price_tier": [
+          "high_end"
+        ]
+      },
+      "popularity": 0.74,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:wine_and_spirits",
+          "name": "Wine & Spirits",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:premium",
+          "name": "Premium",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:festive",
+          "name": "Festive",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Driftwood Denim",
+      "entity_id": "9B5D437A-8190-4D81-A1E8-B3D029E40767",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Selvedge denim and workwear with a vintage West Coast look.",
+        "industry_categories": [
+          "Apparel",
+          "Fashion"
+        ],
+        "brand_personality": [
+          "vintage",
+          "authentic",
+          "crafted"
+        ],
+        "use_occasions": [
+          "everyday wear",
+          "concerts and events"
+        ],
+        "target_audience": [
+          "young adults",
+          "creatives"
+        ],
+        "psychographic_segments": [
+          "vintage shoppers",
+          "style-conscious consumers"
+        ],
+        "price_tier": [
+          "high_end"
+        ]
+      },
+      "popularity": 0.66,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:fashion",
+          "name": "Fashion",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:fashion:jeans",
+          "name": "Jeans",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:nostalgic",
+          "name": "Nostalgic",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:indie",
+          "name": "Indie",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Sundial Sunscreen",
+      "entity_id": "6A950197-92F8-424B-A27A-9B590E195E69",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Reef-safe mineral sunscreen sold at pharmacies and surf shops.",
+        "industry_categories": [
+          "Health Beauty",
+          "Skincare"
+        ],
+        "brand_personality": [
+          "clean",
+          "sunny",
+          "responsible"
+        ],
+        "use_occasions": [
+          "beach days",
+          "outdoor festivals",
+          "sports"
+        ],
+        "target_audience": [
+          "families",
+          "young adults"
+        ],
+        "psychographic_segments": [
+          "outdoor enthusiasts",
+          "eco-conscious consumers"
+        ],
+        "price_tier": [
+          "medium_end"
+        ]
+      },
+      "popularity": 0.69,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:health_and_beauty",
+          "name": "Health & Beauty",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:eco_friendly",
+          "name": "Eco-Friendly",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:outdoorsy",
+          "name": "Outdoorsy",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Pocketwave",
+      "entity_id": "1182CBB2-E06D-4C83-AACE-0A427C3D0D5E",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Music streaming app known for live-session recordings and local-scene playlists.",
+        "industry_categories": [
+          "Media",
+          "Music Streaming"
+        ],
+        "brand_personality": [
+          "curious",
+          "community-driven",
+          "indie"
+        ],
+        "use_occasions": [
+          "commuting",
+          "discovering new music",
+          "concerts and events"
+        ],
+        "target_audience": [
+          "teens",
+          "young adults"
+        ],
+        "psychographic_segments": [
+          "music discoverers",
+          "playlist curators"
+        ],
+        "price_tier": [
+          "low_end"
+        ]
+      },
+      "popularity": 0.85,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:mobile_app",
+          "name": "Mobile App",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:mobile_app:streaming_service",
+          "name": "Streaming Service App",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:youthful",
+          "name": "Youthful",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:indie",
+          "name": "Indie",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Arcadia Sneakers",
+      "entity_id": "DB4926DE-F495-4998-A586-2CC97BA72896",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Retro-styled skate and lifestyle sneakers.",
+        "industry_categories": [
+          "Footwear",
+          "Streetwear"
+        ],
+        "brand_personality": [
+          "playful",
+          "retro",
+          "street"
+        ],
+        "use_occasions": [
+          "skateboarding",
+          "casual wear",
+          "concerts and events"
+        ],
+        "target_audience": [
+          "teens",
+          "young adults"
+        ],
+        "psychographic_segments": [
+          "sneakerheads",
+          "skaters"
+        ],
+        "price_tier": [
+          "medium_end"
+        ]
+      },
+      "popularity": 0.77,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:fashion",
+          "name": "Fashion",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:fashion:footwear",
+          "name": "Footwear",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:fashion:footwear:sneakers",
+          "name": "Sneakers",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:youthful",
+          "name": "Youthful",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:nostalgic",
+          "name": "Nostalgic",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Harvest Lane Grocers",
+      "entity_id": "90081938-5F2C-4E70-A0E5-98599D37D6D3",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Regional natural-foods grocery chain with a strong local-sourcing story.",
+        "industry_categories": [
+          "Retail",
+          "Grocery"
+        ],
+        "brand_personality": [
+          "neighborly",
+          "wholesome",
+          "local"
+        ],
+        "use_occasions": [
+          "weekly shopping",
+          "community events"
+        ],
+        "target_audience": [
+          "families",
+          "adults 30-54"
+        ],
+        "psychographic_segments": [
+          "health-conscious consumers",
+          "locavores"
+        ],
+        "price_tier": [
+          "medium_end"
+        ]
+      },
+      "popularity": 0.72,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:retail",
+          "name": "Retail",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:food_and_beverage",
+          "name": "Food & Beverage",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:eco_friendly",
+          "name": "Eco-Friendly",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:healthy",
+          "name": "Healthy",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Stagelight Ticketing",
+      "entity_id": "28C9E7B6-D90B-4BFD-AFAB-F76E24BD7819",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Ticketing and fan-club app for independent venues.",
+        "industry_categories": [
+          "Entertainment",
+          "Ticketing"
+        ],
+        "brand_personality": [
+          "fan-first",
+          "modern",
+          "local"
+        ],
+        "use_occasions": [
+          "concerts and events",
+          "nights out"
+        ],
+        "target_audience": [
+          "young adults",
+          "music fans"
+        ],
+        "psychographic_segments": [
+          "concert goers",
+          "local scene supporters"
+        ],
+        "price_tier": [
+          "low_end"
+        ]
+      },
+      "popularity": 0.63,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:mobile_app",
+          "name": "Mobile App",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:genre:brand:entertainment",
+          "name": "Entertainment",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:innovative",
+          "name": "Innovative",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Cinder Peak Energy",
+      "entity_id": "0EAEAD55-EAB1-4924-A409-35CE30DAC27C",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Plant-based energy drink sponsoring action sports.",
+        "industry_categories": [
+          "Food Beverage",
+          "Energy Drinks"
+        ],
+        "brand_personality": [
+          "loud",
+          "energetic",
+          "extreme"
+        ],
+        "use_occasions": [
+          "action sports",
+          "gaming",
+          "music festivals"
+        ],
+        "target_audience": [
+          "teens",
+          "young adults"
+        ],
+        "psychographic_segments": [
+          "action sports fans",
+          "gamers"
+        ],
+        "price_tier": [
+          "low_end"
+        ]
+      },
+      "popularity": 0.8,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:food_and_beverage",
+          "name": "Food & Beverage",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:youthful",
+          "name": "Youthful",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:festive",
+          "name": "Festive",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    },
+    {
+      "name": "Juniper & Oak Wines",
+      "entity_id": "072E42B1-990F-492E-AE51-4D6F727139EB",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "properties": {
+        "short_description": "Central Coast winery with tasting rooms and a summer concert series.",
+        "industry_categories": [
+          "Alcoholic Beverages",
+          "Wine"
+        ],
+        "brand_personality": [
+          "refined",
+          "relaxed",
+          "local"
+        ],
+        "use_occasions": [
+          "tasting rooms",
+          "date nights",
+          "outdoor concerts"
+        ],
+        "target_audience": [
+          "adults 35-54"
+        ],
+        "psychographic_segments": [
+          "wine enthusiasts",
+          "weekend travelers"
+        ],
+        "price_tier": [
+          "high_end"
+        ]
+      },
+      "popularity": 0.67,
+      "tags": [
+        {
+          "id": "urn:tag:genre:brand:wine_and_spirits",
+          "name": "Wine & Spirits",
+          "type": "urn:tag:genre:brand"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:premium",
+          "name": "Premium",
+          "type": "urn:tag:adjective:qloo"
+        },
+        {
+          "id": "urn:tag:adjective:qloo:artisanal",
+          "name": "Artisanal",
+          "type": "urn:tag:adjective:qloo"
+        }
+      ]
+    }
+  ],
+  "tagPool": [
+    {
+      "tag_id": "urn:tag:genre:brand:food_and_beverage",
+      "name": "Food & Beverage",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:food_and_beverage"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:food_and_beverage:coffee",
+      "name": "Coffee",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:food_and_beverage:coffee"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:artisanal",
+      "name": "Artisanal",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:artisanal"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:indie",
+      "name": "Indie",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:indie"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:retail",
+      "name": "Retail",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:retail"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:fashion",
+      "name": "Fashion",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:fashion"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:outdoorsy",
+      "name": "Outdoorsy",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:outdoorsy"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:youthful",
+      "name": "Youthful",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:youthful"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:eco_friendly",
+      "name": "Eco-Friendly",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:eco_friendly"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:electronics",
+      "name": "Electronics",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:electronics"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:electronics:headphones",
+      "name": "Headphones",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:electronics:headphones"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:premium",
+      "name": "Premium",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:premium"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:innovative",
+      "name": "Innovative",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:innovative"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:automotive",
+      "name": "Automotive",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:automotive"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:automotive:electric",
+      "name": "Electric",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:automotive:electric"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:healthy",
+      "name": "Healthy",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:healthy"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:wine_and_spirits",
+      "name": "Wine & Spirits",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:wine_and_spirits"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:nostalgic",
+      "name": "Nostalgic",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:nostalgic"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:festive",
+      "name": "Festive",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:festive"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:fashion:jeans",
+      "name": "Jeans",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:fashion:jeans"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:health_and_beauty",
+      "name": "Health & Beauty",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:health_and_beauty"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:mobile_app",
+      "name": "Mobile App",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:mobile_app"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:mobile_app:streaming_service",
+      "name": "Streaming Service App",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:mobile_app:streaming_service"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:fashion:footwear",
+      "name": "Footwear",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:fashion:footwear"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:fashion:footwear:sneakers",
+      "name": "Sneakers",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:fashion:footwear:sneakers"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:entertainment",
+      "name": "Entertainment",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:entertainment"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:luxury",
+      "name": "Luxury",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:luxury"
+    },
+    {
+      "tag_id": "urn:tag:adjective:qloo:family_friendly",
+      "name": "Family-Friendly",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:adjective:qloo",
+      "tag_value": "urn:tag:adjective:qloo:family_friendly"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:sports_organization",
+      "name": "Sports Organization",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:sports_organization"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:games",
+      "name": "Games",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:games"
+    },
+    {
+      "tag_id": "urn:tag:genre:brand:software",
+      "name": "Software",
+      "types": [
+        "urn:entity:brand"
+      ],
+      "subtype": "urn:tag:genre:brand",
+      "tag_value": "urn:tag:genre:brand:software"
+    }
+  ],
+  "neighborhoods": [
+    "Downtown",
+    "Old Town",
+    "Waterfront",
+    "Arts District",
+    "Midtown",
+    "Harbor"
+  ],
+  "streets": [
+    "State St",
+    "Main St",
+    "Ocean Ave",
+    "Mission St",
+    "Cabrillo Blvd",
+    "Anacapa St"
+  ]
+}

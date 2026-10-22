@@ -14,8 +14,8 @@ export interface PitchEvidence {
     overlappingTags: Array<{ name: string; audienceAffinity: number }>;
     strongestPerformerLink?: { name: string; share: number };
     demographicAlignment?: number;
-    eventOccasions: string[];
-    localLocations: Array<{ name: string; address?: string }>;
+    /** Number of qloo_where_popular hotspots found for the brand in the event city. */
+    localHotspotsFound: number;
   };
 }
 
@@ -37,8 +37,7 @@ export function buildPitchEvidence(event: EventInput, brand: BrandEvidence, audi
       overlappingTags: brand.overlappingTags.slice(0, 4).map((t) => ({ name: t.name, audienceAffinity: t.audienceAffinity })),
       strongestPerformerLink: top ? { name: top.name, share: top.score } : undefined,
       demographicAlignment: brand.demographicAlignment,
-      eventOccasions: brand.eventOccasions.slice(0, 3),
-      localLocations: brand.localPresence.slice(0, 2).map((p) => ({ name: p.name, address: p.address })),
+      localHotspotsFound: brand.hotspots.length,
     },
   };
 }
@@ -48,7 +47,7 @@ const SYSTEM_PROMPT = [
   "Use ONLY the facts in the EVIDENCE JSON. Do not invent attendance, prices, sales, dates, quotes, or any number that is not in the evidence.",
   "Qloo affinity scores describe aggregate taste associations between audiences and brands. Never present them as probabilities, purchase intent, or facts about individuals.",
   "Write one paragraph of 80 to 120 words, plain text, no headings, no bullet points, no markdown, no greeting or sign-off.",
-  "Mention the event (performers, city, venue and date if given), why this audience fits the brand using the overlapping taste tags and the Qloo affinity score, and one concrete activation idea that follows from the evidence (for example a local location or an event-related use occasion).",
+  "Mention the event (performers, city, venue and date if given), why this audience fits the brand using the overlapping taste tags and the Qloo affinity score, and one concrete activation idea that follows from the evidence (for example a shared taste tag, or local promotion when Qloo found local hotspots).",
 ].join(" ");
 
 export function buildPitchMessages(evidence: PitchEvidence): ChatMessage[] {
@@ -93,14 +92,12 @@ export function templatePitch(evidence: PitchEvidence): string {
   if (brand.strongestPerformerLink) {
     parts.push(`Of the lineup, ${brand.strongestPerformerLink.name} contributes most to that affinity.`);
   }
-  if (brand.localLocations.length) {
-    parts.push(
-      `With ${brand.name} already in ${event.city} (${brand.localLocations[0]!.name}), we can pair on-site sampling with a nearby-location offer for attendees.`,
-    );
-  } else if (brand.eventOccasions.length) {
-    parts.push(`Qloo lists "${brand.eventOccasions[0]}" among ${brand.name}'s use occasions, which fits an on-site activation at the show.`);
+  if (brand.overlappingTags.length) {
+    parts.push(`We would build an on-site activation around the shared "${brand.overlappingTags[0]!.name}" taste${brand.localHotspotsFound ? `, with street-level promotion in the parts of ${event.city} where Qloo shows ${brand.name}'s strongest affinity` : ""}.`);
+  } else if (brand.localHotspotsFound) {
+    parts.push(`Qloo's heatmap shows where in ${event.city} ${brand.name}'s affinity is strongest, which we would use to target pre-show promotion.`);
   } else {
-    parts.push(`We would build an on-site activation around the shared tastes above.`);
+    parts.push(`We would build an on-site activation around the tastes above.`);
   }
   parts.push("These scores describe aggregate taste associations, not individual attendees.");
   return parts.join(" ");

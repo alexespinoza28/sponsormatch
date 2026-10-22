@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "describe",
+  "status": "ok",
+  "interpretation": {
+    "entity": {
+      "input": "the fixture tones",
+      "entityId": "0A1B2C3D-0000-4000-A000-000000000001",
+      "name": "The Fixture Tones",
+      "type": "urn:entity:artist",
+      "match": "exact"
+    }
+  },
+  "resolution": {
+    "contract_version": "1",
+    "provider": {
+      "id": "native"
+    },
+    "outcomes": []
+  },
+  "results": [
+    {
+      "entity_id": "0A1B2C3D-0000-4000-A000-000000000001",
+      "name": "The Fixture Tones",
+      "type": "urn:entity",
+      "subtype": "urn:entity:artist",
+      "popularity": 0.912,
+      "properties": {
+        "short_description": "Synthetic indie band used in tests"
+      }
+    }
+  ],
+  "result_count": 1,
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-1",
+    "duration_ms": 12
+  },
+  "provenance": {
+    "source": "Qloo API",
+    "endpoint": "/entities",
+    "documentation": "https://docs.qloo.com/reference/get-entities",
+    "transport": "mcp",
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/entities",
+        "query": {
+          "entity_ids": [
+            "0A1B2C3D-0000-4000-A000-000000000001"
+          ]
+        }
+      }
+    ]
+  }
+}

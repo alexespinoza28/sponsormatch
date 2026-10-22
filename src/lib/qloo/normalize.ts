@@ -1,106 +1,105 @@
 import type {
   AgeBucket,
+  QlooCandidate,
   QlooDemographicsRow,
-  QlooEntity,
-  QlooEntityProperties,
-  QlooInsightsResponse,
-  QlooSearchResponse,
-  QlooTag,
-  QlooTagsResponse,
+  QlooEnvelope,
+  QlooResolutionIssue,
+  QlooResultEntity,
+  QlooResultTag,
 } from "./types";
 import { AGE_BUCKETS } from "./types";
 
-// Doc examples disagree on where some fields live (insights examples nest
-// properties and put affinity under `query`; the brand taxonomy example puts
-// brand fields and affinity at top level). These helpers accept both.
+// Readers for the harness result envelope. Everything is defensive: the
+// envelope's `results` and `interpretation` are typed `unknown` in the
+// published output schema.
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
 
 function num(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function strings(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const out = value.filter((v): v is string => typeof v === "string" && v.trim() !== "");
-  return out.length ? out : undefined;
+export function round(value: number, digits: number): number {
+  const f = 10 ** digits;
+  return Math.round(value * f) / f;
 }
 
-export function entityAffinity(entity: QlooEntity): number | undefined {
-  return num(entity.query?.affinity) ?? num(entity.affinity);
+function resultArray(env: QlooEnvelope): unknown[] {
+  return Array.isArray(env.results) ? env.results : [];
 }
 
-export type BrandListField =
-  | "industry_categories"
-  | "brand_personality"
-  | "use_occasions"
-  | "target_audience"
-  | "psychographic_segments"
-  | "complementary_brands"
-  | "price_tier";
-
-export function entityProperty(entity: QlooEntity, field: BrandListField): string[] | undefined {
-  return strings(entity.properties?.[field]) ?? strings(entity[field]);
+export function resultEntities(env: QlooEnvelope): QlooResultEntity[] {
+  return resultArray(env).filter(
+    (r): r is QlooResultEntity => isRecord(r) && typeof r.entity_id === "string" && typeof r.name === "string",
+  );
 }
 
-export function entityDescription(entity: QlooEntity): string | undefined {
-  const p: QlooEntityProperties = entity.properties ?? {};
-  const value = p.short_description ?? p.description ?? entity.description;
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+export function resultTags(env: QlooEnvelope): QlooResultTag[] {
+  return resultArray(env).filter((r): r is QlooResultTag => isRecord(r) && typeof r.id === "string" && typeof r.name === "string");
 }
 
-export function entityAddress(entity: QlooEntity): string | undefined {
-  const value = entity.properties?.address ?? entity.address;
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+export function resultDemographics(env: QlooEnvelope): QlooDemographicsRow[] {
+  return resultArray(env).filter(
+    (r): r is QlooDemographicsRow => isRecord(r) && typeof r.entity_id === "string" && isRecord(r.query) && isRecord(r.query.age),
+  );
 }
 
-export function entityImage(entity: QlooEntity): string | undefined {
-  const fromProps = entity.properties?.image?.url;
-  if (typeof fromProps === "string") return fromProps;
-  return typeof entity.url === "string" ? entity.url : undefined;
+export function resolutionIssues(env: QlooEnvelope): QlooResolutionIssue[] {
+  const issues = env.resolution?.issues;
+  return Array.isArray(issues) ? issues.filter((i): i is QlooResolutionIssue => isRecord(i) && typeof i.input === "string") : [];
 }
 
-/** Map of input entity id -> contribution score from per-result explainability. */
-export function entityExplainability(entity: QlooEntity): Map<string, number> {
+export function issueCandidates(issue: QlooResolutionIssue): QlooCandidate[] {
+  return (issue.candidates ?? []).filter((c) => isRecord(c) && typeof c.id === "string" && typeof c.name === "string");
+}
+
+/** describe: the resolved entity from `interpretation.entity`. */
+export function interpretedEntity(env: QlooEnvelope): { entityId: string; name: string; type?: string; match?: string } | undefined {
+  const entity = isRecord(env.interpretation) ? env.interpretation.entity : undefined;
+  if (!isRecord(entity) || typeof entity.entityId !== "string" || typeof entity.name !== "string") return undefined;
+  return {
+    entityId: entity.entityId,
+    name: entity.name,
+    type: typeof entity.type === "string" ? entity.type : undefined,
+    match: typeof entity.match === "string" ? entity.match : undefined,
+  };
+}
+
+export function entityDescription(e: QlooResultEntity): string | undefined {
+  const v = e.properties?.short_description ?? e.properties?.description;
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+export function entityAddress(e: QlooResultEntity): string | undefined {
+  const v = e.properties?.address;
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+export function entityImage(e: QlooResultEntity): string | undefined {
+  const v = e.properties?.image?.url;
+  return typeof v === "string" ? v : undefined;
+}
+
+/**
+ * Per-result explainability -> map of input entity id to contribution score.
+ * Qloo documents the meaning (normalized 0-1 contribution per input entity) but
+ * not the exact layout, so this accepts an array of {entity_id, score} either
+ * directly or under "signal.interests.entities", or an {id: score} object.
+ */
+export function explainabilityScores(e: QlooResultEntity): Map<string, number> {
   const out = new Map<string, number>();
-  const rows = entity.query?.explainability?.["signal.interests.entities"];
-  if (!Array.isArray(rows)) return out;
-  for (const row of rows) {
-    if (row && typeof row.entity_id === "string") {
-      const score = num(row.score);
-      if (score !== undefined) out.set(row.entity_id, score);
+  const x = e.explainability;
+  const rows = Array.isArray(x) ? x : isRecord(x) ? x["signal.interests.entities"] : undefined;
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      if (isRecord(row) && typeof row.entity_id === "string" && num(row.score) !== undefined) out.set(row.entity_id, num(row.score)!);
     }
+  } else if (isRecord(rows)) {
+    for (const [k, v] of Object.entries(rows)) if (num(v) !== undefined) out.set(k, num(v)!);
   }
   return out;
-}
-
-export function tagId(tag: QlooTag): string | undefined {
-  return tag.tag_id ?? tag.id ?? tag.tag_value;
-}
-
-export function tagAffinity(tag: QlooTag): number | undefined {
-  return num(tag.query?.affinity);
-}
-
-export function searchResults(response: QlooSearchResponse): QlooEntity[] {
-  // /search documents `results` as an array; tolerate `results.entities` too.
-  const r = response?.results as unknown;
-  if (Array.isArray(r)) return r as QlooEntity[];
-  const nested = (r as { entities?: unknown })?.entities;
-  return Array.isArray(nested) ? (nested as QlooEntity[]) : [];
-}
-
-export function insightEntities(response: QlooInsightsResponse): QlooEntity[] {
-  const e = response?.results?.entities;
-  return Array.isArray(e) ? e : [];
-}
-
-export function insightTags(response: QlooInsightsResponse | QlooTagsResponse): QlooTag[] {
-  const t = response?.results?.tags;
-  return Array.isArray(t) ? t : [];
-}
-
-export function insightDemographics(response: QlooInsightsResponse): QlooDemographicsRow[] {
-  const d = response?.results?.demographics;
-  return Array.isArray(d) ? d.filter((row) => row && typeof row.entity_id === "string" && row.query) : [];
 }
 
 export interface DemographicProfile {
@@ -122,9 +121,4 @@ export function averageDemographics(rows: QlooDemographicsRow[]): DemographicPro
   const n = rows.length;
   for (const bucket of AGE_BUCKETS) age[bucket] = round(age[bucket] / n, 2);
   return { age, gender: { male: round(male / n, 2), female: round(female / n, 2) } };
-}
-
-export function round(value: number, digits: number): number {
-  const f = 10 ** digits;
-  return Math.round(value * f) / f;
 }

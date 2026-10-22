@@ -1,22 +1,23 @@
-import { HttpQlooClient } from "./client";
-import { MockQlooClient } from "./mock";
-import type { QlooClient, QlooRequestRecord } from "./types";
+import { MockQlooTools } from "./mock";
+import type { QlooToolCallRecord, QlooTools } from "./types";
 
 export * from "./types";
-export { HttpQlooClient, QlooApiError, QLOO_HACKATHON_BASE_URL, buildUrl, serializeQuery } from "./client";
-export { MockQlooClient } from "./mock";
+export { MockQlooTools } from "./mock";
 
 /**
- * Live client when QLOO_API_KEY is set, otherwise the offline mock.
- * Server-only: the key is read from the environment and never leaves the server.
+ * Live tools over `qloo mcp` when QLOO_API_KEY is set; otherwise the offline
+ * mock, which never spawns the harness. Server-only.
  */
-export function createQlooClient(options: {
+export async function createQlooTools(options: {
   env?: Record<string, string | undefined>;
-  onRequest?: (record: QlooRequestRecord) => void;
+  onCall?: (record: QlooToolCallRecord) => void;
   mockLatencyMs?: number;
-} = {}): QlooClient {
+} = {}): Promise<QlooTools> {
   const env = options.env ?? process.env;
-  const key = env.QLOO_API_KEY?.trim();
-  if (key) return new HttpQlooClient({ apiKey: key, onRequest: options.onRequest });
-  return new MockQlooClient({ onRequest: options.onRequest, latencyMs: options.mockLatencyMs ?? 0 });
+  if (env.QLOO_API_KEY?.trim()) {
+    // Imported lazily so mock mode never loads the MCP SDK or spawns anything.
+    const { McpQlooTools, sharedHarness } = await import("./mcp");
+    return new McpQlooTools({ process: sharedHarness(), onCall: options.onCall });
+  }
+  return new MockQlooTools({ onCall: options.onCall, latencyMs: options.mockLatencyMs ?? 0 });
 }

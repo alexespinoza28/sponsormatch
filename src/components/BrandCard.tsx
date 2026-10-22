@@ -28,14 +28,18 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export function BrandCard({ brand, pitch, mock }: { brand: BrandEvidence; pitch?: Pitch; mock: boolean }) {
-  const meta = brand.metadata;
   const moved = brand.qlooRank - brand.rank;
   return (
     <article className="panel brand">
       <header className="brand-head">
         <span className="rank">#{brand.rank}</span>
         <div className="brand-title">
-          <h3>{brand.name}</h3>
+          <h3>
+            {brand.name}{" "}
+            {brand.source !== "recommended" && (
+              <span className="badge tiny muted">{brand.source === "both" ? "on your list + recommended" : "from your list"}</span>
+            )}
+          </h3>
           {brand.description && <p className="muted">{brand.description}</p>}
         </div>
         <div className="fit" title="Sponsor fit, 0-100">
@@ -49,7 +53,13 @@ export function BrandCard({ brand, pitch, mock }: { brand: BrandEvidence; pitch?
           <dt>Qloo affinity</dt>
           <dd>
             {score(brand.qlooAffinity, 3)}
-            <span className="small muted"> (Qloo #{brand.qlooRank}{moved > 0 ? `, up ${moved}` : moved < 0 ? `, down ${-moved}` : ""})</span>
+            {brand.source !== "requested" && (
+              <span className="small muted">
+                {" "}
+                (Qloo #{brand.qlooRank}
+                {moved > 0 ? `, up ${moved}` : moved < 0 ? `, down ${-moved}` : ""})
+              </span>
+            )}
           </dd>
         </div>
         <div>
@@ -101,28 +111,40 @@ export function BrandCard({ brand, pitch, mock }: { brand: BrandEvidence; pitch?
           </div>
         )}
         <div>
-          <h4>Local presence</h4>
-          {brand.localPresence.length ? (
-            <ul className="places">
-              {brand.localPresence.map((p) => (
-                <li key={p.id}>
-                  {p.name}
-                  {p.address ? <span className="muted small"> - {p.address}</span> : null}
-                  {p.affinity !== undefined ? <span className="chip-score"> {score(p.affinity)}</span> : null}
+          <h4>Brand&apos;s top Qloo tags</h4>
+          {brand.brandTags.length ? (
+            <ul className="chips">
+              {brand.brandTags.slice(0, 8).map((t) => (
+                <li key={t.id} className="chip" title={t.id}>
+                  {t.name} {t.affinity !== undefined && <span className="chip-score">{score(t.affinity)}</span>}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="muted small">{brand.localPresenceChecked ? "No locations found in this city." : "Not checked."}</p>
+            <p className="muted small">{brand.brandTagsChecked ? "Qloo returned no tags." : "Not available."}</p>
           )}
         </div>
-        {(brand.eventOccasions.length > 0 || meta.psychographics.length > 0) && (
+        {brand.hotspotsChecked && (
           <div>
-            <h4>Qloo brand profile</h4>
-            <p className="small">
-              {brand.eventOccasions.length > 0 && <>Use occasions: {brand.eventOccasions.join(", ")}. </>}
-              {meta.psychographics.length > 0 && <>Segments: {meta.psychographics.join(", ")}.</>}
-            </p>
+            <h4>Local hotspots</h4>
+            {brand.hotspots.length ? (
+              <ul className="places">
+                {brand.hotspots.map((h) => (
+                  <li key={`${h.latitude},${h.longitude}`}>
+                    <a
+                      href={`https://www.openstreetmap.org/?mlat=${h.latitude}&mlon=${h.longitude}#map=15/${h.latitude}/${h.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {h.latitude.toFixed(3)}, {h.longitude.toFixed(3)}
+                    </a>
+                    {h.affinity !== undefined ? <span className="chip-score"> affinity {score(h.affinity)}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted small">No heatmap points in this city.</p>
+            )}
           </div>
         )}
       </div>

@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "entity_tags",
+  "status": "ok",
+  "results": [
+    {
+      "id": "urn:tag:adjective:qloo:indie",
+      "name": "Indie",
+      "type": "urn:tag:adjective:qloo",
+      "popularity": 0.5,
+      "affinity": 0.88
+    },
+    {
+      "id": "urn:tag:genre:brand:food_and_beverage",
+      "name": "Food & Beverage",
+      "type": "urn:tag:genre:brand",
+      "affinity": 0.74
+    },
+    {
+      "id": "urn:tag:adjective:qloo:indie",
+      "name": "Indie",
+      "type": "urn:tag:adjective:qloo",
+      "affinity": 0.5
+    },
+    {
+      "id": "urn:tag:genre:brand:retail",
+      "name": "Retail",
+      "type": "urn:tag:genre:brand"
+    }
+  ],
+  "result_count": 4,
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-4",
+    "duration_ms": 12
+  }
+}

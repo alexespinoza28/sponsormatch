@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "recommend",
+  "status": "error",
+  "summary": "Rate limited.",
+  "results": [],
+  "result_count": 0,
+  "error": {
+    "code": "QLOO_RATE_LIMIT",
+    "layer": "qloo",
+    "retryable": true,
+    "recovery": "Wait and retry."
+  },
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-8",
+    "duration_ms": 12
+  }
+}

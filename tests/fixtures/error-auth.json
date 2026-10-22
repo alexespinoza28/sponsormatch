@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "recommend",
+  "status": "error",
+  "summary": "Qloo rejected the credential.",
+  "results": [],
+  "result_count": 0,
+  "error": {
+    "code": "QLOO_AUTH",
+    "layer": "qloo",
+    "retryable": false,
+    "recovery": "Check the Qloo API key."
+  },
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-7",
+    "duration_ms": 12
+  }
+}

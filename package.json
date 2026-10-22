@@ -2,7 +2,7 @@
   "name": "sponsormatch",
   "version": "0.1.0",
   "private": true,
-  "description": "An agent that uses Qloo's taste graph to find brands a local event's audience has affinity for, then drafts evidence-backed sponsor pitches.",
+  "description": "An agent that uses Qloo's taste graph (through the official qloo mcp harness) to find brands a local event's audience has affinity for, then drafts evidence-backed sponsor pitches.",
   "license": "MIT",
   "engines": {
     "node": ">=22.19.0"
@@ -13,9 +13,12 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:mcp": "node scripts/mcp-smoke.mjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.1",
+    "@qloo/qloo-harness": "0.1.26",
     "next": "16.3.8",
     "react": "19.3.0",
     "react-dom": "19.3.0"

@@ -1,5 +1,5 @@
 import type { DemographicProfile } from "@/lib/qloo/normalize";
-import type { QlooRequestRecord } from "@/lib/qloo/types";
+import type { QlooCandidate, QlooToolCallRecord } from "@/lib/qloo/types";
 
 export interface EventInput {
   performers: string[];
@@ -9,6 +9,20 @@ export interface EventInput {
   date?: string;
   /** Optional sponsor category, e.g. "beverage" or "outdoor apparel". */
   category?: string;
+  /** Optional brands the producer already wants scored (ranked with qloo_rank). */
+  brands?: string[];
+  /** User-confirmed entity IDs for inputs that were ambiguous: input text -> Qloo entity ID. */
+  pins?: Record<string, string>;
+}
+
+/** An ambiguous or unmatched input reported by a tool's needs_input envelope. */
+export interface Choice {
+  field: "performer" | "venue" | "city" | "category" | "brand";
+  input: string;
+  kind: string;
+  /** What the agent went with, if it continued. */
+  chosen?: { id: string; name: string };
+  candidates: QlooCandidate[];
 }
 
 export interface ResolvedEntity {
@@ -16,7 +30,8 @@ export interface ResolvedEntity {
   id: string;
   name: string;
   type: string;
-  match: "exact" | "best_guess";
+  /** Harness match kind (exact, semantic, identifier, ...) or the agent's own fallback. */
+  match: string;
   popularity?: number;
   address?: string;
   alternatives: Array<{ id: string; name: string; popularity?: number }>;
@@ -31,6 +46,7 @@ export interface ResolvedTag {
 export interface Resolution {
   performers: ResolvedEntity[];
   unresolved: string[];
+  choices: Choice[];
   venue?: ResolvedEntity;
   locality?: ResolvedEntity;
   category?: ResolvedTag;
@@ -55,11 +71,13 @@ export interface Contributor {
   score: number;
 }
 
-export interface LocalPlace {
-  id: string;
-  name: string;
-  address?: string;
+/** A heatmap point from qloo_where_popular. */
+export interface Hotspot {
+  latitude: number;
+  longitude: number;
+  geohash?: string;
   affinity?: number;
+  popularity?: number;
 }
 
 export interface BrandEvidence {
@@ -72,22 +90,16 @@ export interface BrandEvidence {
   qlooAffinity: number;
   popularity?: number;
   overlappingTags: Array<{ id: string; name: string; audienceAffinity: number }>;
-  brandTags: Array<{ id: string; name: string }>;
+  brandTags: Array<{ id: string; name: string; affinity?: number }>;
   tagOverlapScore: number;
   contributors: Contributor[];
   demographics?: DemographicProfile;
   demographicAlignment?: number;
-  localPresence: LocalPlace[];
-  localPresenceChecked: boolean;
-  metadata: {
-    useOccasions: string[];
-    targetAudience: string[];
-    psychographics: string[];
-    personality: string[];
-    industries: string[];
-    priceTier: string[];
-  };
-  eventOccasions: string[];
+  hotspots: Hotspot[];
+  hotspotsChecked: boolean;
+  brandTagsChecked: boolean;
+  /** recommended = from qloo_recommend; requested = the producer asked to score it (qloo_rank). */
+  source: "recommended" | "requested" | "both";
   sponsorFit: number;
   fitBreakdown: { affinity: number; tags: number; demographics?: number };
 }
@@ -109,7 +121,10 @@ export interface StepEvent {
   title: string;
   summary?: string;
   decisions?: string[];
-  requests?: QlooRequestRecord[];
+  /** partial/degraded summaries and resolution warnings from the harness. */
+  warnings?: string[];
+  choices?: Choice[];
+  calls?: QlooToolCallRecord[];
 }
 
 export interface AgentResult {
@@ -119,7 +134,7 @@ export interface AgentResult {
   audience: AudienceProfile;
   brands: BrandEvidence[];
   pitches: Pitch[];
-  requestCount: number;
+  toolCallCount: number;
 }
 
 export type AgentEvent =

@@ -1,121 +1,159 @@
-// Types for the Qloo endpoints SponsorMatch uses, shaped after the public
-// Qloo docs (https://docs.qloo.com/reference/insights-api-deep-dive,
-// /reference/get-search, /reference/search-tags, /reference/demographics-use-case,
-// /reference/taste-analysis). Fields the docs mark as optional, or that differ
-// between doc examples, are optional here and normalized in ./normalize.ts.
+// Types for the Qloo harness MCP tools (`qloo mcp`, @qloo/qloo-harness 0.1.26).
+// Input types mirror the inputSchema each tool returns from tools/list (recorded
+// in RESOURCES.md "API notes"). The result envelope mirrors the tools' shared
+// outputSchema (result schema version 1.0-preview.1).
 
-export const ENTITY_TYPES = {
-  artist: "urn:entity:artist",
-  brand: "urn:entity:brand",
-  place: "urn:entity:place",
-  locality: "urn:entity:locality",
-} as const;
+export const QLOO_TOOL_NAMES = [
+  "qloo_capabilities",
+  "qloo_recommend",
+  "qloo_rank",
+  "qloo_describe",
+  "qloo_where_popular",
+  "qloo_compare_audiences",
+  "qloo_entity_tags",
+  "qloo_audience_demographics",
+  "qloo_trends",
+  "qloo_find_tags",
+] as const;
+export type QlooToolName = (typeof QLOO_TOOL_NAMES)[number];
 
-export const INSIGHT_TYPES = {
-  ...ENTITY_TYPES,
-  tag: "urn:tag",
-  demographics: "urn:demographics",
-} as const;
+/** Insights entity types accepted by target_type / option_type. */
+export type InsightsEntityType = "artist" | "book" | "brand" | "movie" | "person" | "place" | "podcast" | "tv_show" | "videogame";
+/** Search entity types accepted by describe/entity_tags/audience_demographics. */
+export type SearchEntityType = InsightsEntityType | "locality" | "actor" | "album" | "author" | "director";
 
-export type QlooEntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];
-export type QlooInsightType = (typeof INSIGHT_TYPES)[keyof typeof INSIGHT_TYPES];
+type Op = "union" | "intersection";
+/** Arrays of entity names or Qloo entity UUIDs: 1..10 items. */
+type Names = string[];
 
-/** A tag attached to an entity, e.g. `{ id: "urn:tag:genre:brand:fashion", ... }`. */
-export interface QlooEntityTag {
+export interface QlooToolInputs {
+  qloo_capabilities: { operation_ids?: string[] };
+  qloo_recommend: {
+    target_type: InsightsEntityType;
+    signals?: Names;
+    signal_tags?: Names;
+    signal_tags_operator?: Op;
+    signal_location?: string;
+    demographic?: string;
+    filter_location?: string;
+    include_tags?: Names;
+    include_tags_operator?: Op;
+    exclude_tags?: Names;
+    exclude_tags_operator?: Op;
+    explain?: boolean;
+    /** 1..20, default 10 */
+    limit?: number;
+  };
+  qloo_rank: {
+    options: Names;
+    option_type: InsightsEntityType;
+    signals?: Names;
+    signal_location?: string;
+    demographic?: string;
+    include_tags?: Names;
+    exclude_tags?: Names;
+  };
+  qloo_describe: { entity: string; type?: SearchEntityType };
+  qloo_where_popular: { entity: string; entity_type?: SearchEntityType; within: string; limit?: number };
+  qloo_compare_audiences: { group_a: Names; group_b: Names; target_type?: InsightsEntityType; limit?: number };
+  qloo_entity_tags: { entities: Names; entity_type?: SearchEntityType; limit?: number };
+  qloo_audience_demographics: { entity: string; entity_type?: SearchEntityType; limit?: number };
+  qloo_trends: { entities: string[]; entity_type: InsightsEntityType; start_date: string; end_date: string; limit?: number };
+  qloo_find_tags: { query: string; semantic?: boolean; limit?: number };
+}
+
+export type QlooStatus = "ok" | "empty" | "needs_input" | "partial" | "degraded" | "error";
+
+export interface QlooEnvelopeError {
+  code: string;
+  layer: string;
+  retryable: boolean;
+  recovery: string;
+}
+
+export interface QlooProvenanceRequest {
+  method: "GET";
+  path: string;
+  query: unknown;
+}
+
+/** A candidate offered when an input is ambiguous (needs_input). */
+export interface QlooCandidate {
   id: string;
   name: string;
   type?: string;
-  value?: string;
-}
-
-/**
- * Per-result explainability (feature.explainability=true). The docs describe it
- * as "which input entities contributed to the recommendation, with normalized
- * scores between 0 and 1" but do not publish the exact JSON layout, so this
- * accepts the layout SponsorMatch assumes plus a warning string.
- */
-export interface QlooExplainability {
-  "signal.interests.entities"?: Array<{ entity_id: string; score: number }>;
-  warning?: string;
-  [key: string]: unknown;
-}
-
-export interface QlooEntityQuery {
-  affinity?: number;
-  explainability?: QlooExplainability;
-  measurements?: Record<string, number>;
-  [key: string]: unknown;
-}
-
-/** Properties vary by entity subtype. Brand fields come from the schema taxonomy page. */
-export interface QlooEntityProperties {
+  popularity?: number;
   description?: string;
-  short_description?: string;
-  image?: { url: string };
-  address?: string;
-  geocode?: {
-    name?: string;
-    admin1_region?: string;
-    country_code?: string;
-    metro?: string;
+  release_year?: number;
+  address?: unknown;
+}
+
+export interface QlooResolutionIssue {
+  input: string;
+  kind: string; // "ambiguous" | "not_found" | ...
+  input_kind: "entity" | "tag";
+  field: string;
+  scope?: string;
+  purpose?: string;
+  candidates?: QlooCandidate[];
+  warnings?: string[];
+}
+
+export interface QlooEnvelope {
+  schema_version: string;
+  operation: string;
+  status: QlooStatus;
+  summary?: string;
+  interpretation?: unknown;
+  results?: unknown;
+  result_count?: number;
+  warnings?: string[];
+  resolution?: { issues?: QlooResolutionIssue[]; [key: string]: unknown };
+  error?: QlooEnvelopeError;
+  execution: { transport: "direct" | "cli" | "mcp"; transport_name: string; correlation_id: string; duration_ms: number };
+  provenance?: {
+    source: string;
+    endpoint: string;
+    documentation: string;
+    transport?: string;
+    requests?: QlooProvenanceRequest[];
   };
-  official_site?: string;
-  industry_categories?: string[];
-  brand_personality?: string[];
-  use_occasions?: string[];
-  target_audience?: string[];
-  psychographic_segments?: string[];
-  complementary_brands?: string[];
-  price_tier?: string[];
-  business_rating?: number;
   [key: string]: unknown;
 }
 
-export interface QlooEntity {
-  name: string;
+/** Compact entity as returned in `results` by describe/recommend/rank. */
+export interface QlooResultEntity {
   entity_id: string;
-  type?: string; // "urn:entity"
-  subtype?: string; // "urn:entity:brand", ...
-  /** Some doc examples put affinity at top level; insights examples put it under query. */
-  affinity?: number;
-  popularity?: number;
-  disambiguation?: string;
-  properties?: QlooEntityProperties;
-  tags?: QlooEntityTag[];
-  query?: QlooEntityQuery;
-  /** Brand schema example on the taxonomy page lists brand fields at top level. */
-  [key: string]: unknown;
-}
-
-/** Tag rows returned by /v2/tags and by /v2/insights with filter.type=urn:tag. */
-export interface QlooTag {
-  tag_id?: string;
-  id?: string;
   name: string;
-  types?: string[];
+  type?: string;
   subtype?: string;
-  tag_value?: string;
   popularity?: number;
-  query?: { affinity?: number; [key: string]: unknown };
+  affinity?: number;
+  explainability?: unknown;
+  properties?: {
+    description?: string;
+    short_description?: string;
+    image?: { url?: string };
+    address?: string;
+    geocode?: unknown;
+    [key: string]: unknown;
+  };
 }
 
-export type AgeBucket =
-  | "24_and_younger"
-  | "25_to_29"
-  | "30_to_34"
-  | "35_to_44"
-  | "45_to_54"
-  | "55_and_older";
+/** Compact tag as returned in `results` by entity_tags/find_tags. */
+export interface QlooResultTag {
+  id: string;
+  name: string;
+  type?: string;
+  popularity?: number;
+  affinity?: number;
+}
 
-export const AGE_BUCKETS: AgeBucket[] = [
-  "24_and_younger",
-  "25_to_29",
-  "30_to_34",
-  "35_to_44",
-  "45_to_54",
-  "55_and_older",
-];
+export type AgeBucket = "24_and_younger" | "25_to_29" | "30_to_34" | "35_to_44" | "45_to_54" | "55_and_older";
 
+export const AGE_BUCKETS: AgeBucket[] = ["24_and_younger", "25_to_29", "30_to_34", "35_to_44", "45_to_54", "55_and_older"];
+
+/** Row in audience_demographics `results` (raw Insights urn:demographics row). */
 export interface QlooDemographicsRow {
   entity_id: string;
   query: {
@@ -124,58 +162,19 @@ export interface QlooDemographicsRow {
   };
 }
 
-/** GET /search */
-export interface QlooSearchResponse {
-  success?: boolean;
-  duration?: number;
-  results: QlooEntity[];
+export interface QlooToolCallRecord {
+  tool: QlooToolName;
+  args: Record<string, unknown>;
+  status: QlooStatus | "failed";
+  summary?: string;
+  errorCode?: string;
+  durationMs: number;
+  /** Qloo API requests the harness reports in provenance (no credentials). */
+  requests?: QlooProvenanceRequest[];
+  attempts?: number;
 }
 
-/** GET /v2/insights */
-export interface QlooInsightsResponse {
-  success: boolean;
-  duration?: number;
-  results: {
-    entities?: QlooEntity[];
-    tags?: QlooTag[];
-    demographics?: QlooDemographicsRow[];
-  };
-  query?: {
-    explainability?: unknown;
-    locality?: { signal?: unknown };
-    [key: string]: unknown;
-  };
-}
-
-/** GET /v2/tags */
-export interface QlooTagsResponse {
-  success?: boolean;
-  duration?: number;
-  results: { tags: QlooTag[] };
-}
-
-/** Error body documented for 4xx responses. */
-export interface QlooErrorBody {
-  code?: number;
-  reason?: string;
-  message?: string;
-}
-
-export type QueryValue = string | number | boolean | string[] | undefined;
-export type QlooQuery = Record<string, QueryValue>;
-
-export interface QlooRequestRecord {
-  method: "GET";
-  path: string;
-  query: Record<string, string>;
-  status?: number;
-  durationMs?: number;
-  cached?: boolean;
-}
-
-export interface QlooClient {
+export interface QlooTools {
   readonly mode: "live" | "mock";
-  search(query: QlooQuery): Promise<QlooSearchResponse>;
-  insights(query: QlooQuery): Promise<QlooInsightsResponse>;
-  tags(query: QlooQuery): Promise<QlooTagsResponse>;
+  call<T extends QlooToolName>(tool: T, args: QlooToolInputs[T]): Promise<QlooEnvelope>;
 }

@@ -595,3 +595,60 @@ h4 {
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
+
+.badge.tiny {
+  font-size: 10px;
+  padding: 0 6px;
+  vertical-align: middle;
+}
+
+.badge.bad {
+  background: var(--error);
+  color: #fff;
+  border-color: transparent;
+}
+
+.warnings {
+  margin: 6px 0 0 30px;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--warn-text);
+}
+
+.choices {
+  margin: 8px 0 0 30px;
+  display: grid;
+  gap: 8px;
+}
+
+.choice p {
+  margin: 0 0 4px;
+}
+
+.chip-button {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.chip-button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+button.link {
+  background: none;
+  color: var(--accent);
+  padding: 0;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.places a {
+  color: var(--accent);
+}

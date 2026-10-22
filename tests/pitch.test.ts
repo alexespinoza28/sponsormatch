@@ -31,10 +31,10 @@ const brand: BrandEvidence = {
     { id: "P1", name: "The Fixture Tones", kind: "performer", score: 0.31 },
   ],
   demographicAlignment: 0.62,
-  localPresence: [{ id: "L1", name: "Testbrand Coffee - Downtown", address: "12 State St, Santa Barbara" }],
-  localPresenceChecked: true,
-  metadata: { useOccasions: ["outdoor concerts"], targetAudience: [], psychographics: [], personality: [], industries: [], priceTier: [] },
-  eventOccasions: ["outdoor concerts"],
+  hotspots: [{ latitude: 34.43, longitude: -119.72, affinity: 0.97 }],
+  hotspotsChecked: true,
+  brandTagsChecked: true,
+  source: "recommended",
   sponsorFit: 82.4,
   fitBreakdown: { affinity: 0.934, tags: 0.44, demographics: 0.62 },
 };
@@ -87,7 +87,7 @@ describe("pitch evidence and guards", () => {
     const [system, user] = buildPitchMessages(evidence);
     expect(system!.content).toContain("Use ONLY the facts");
     expect(user!.content).toContain('"qlooAffinity": 0.934');
-    expect(user!.content).toContain("Testbrand Coffee - Downtown");
+    expect(user!.content).toContain('"localHotspotsFound": 1');
     expect(evidence.audience.topAgeGroup).toBe("25-29");
     expect(evidence.brand.strongestPerformerLink).toEqual({ name: "The Fixture Tones", share: 0.31 });
   });

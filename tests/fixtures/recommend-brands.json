@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "recommend",
+  "status": "partial",
+  "summary": "Some results came back.",
+  "warnings": [
+    "signal_location matched a broader area"
+  ],
+  "interpretation": {
+    "target_type": "urn:entity:brand",
+    "signal_location": "Santa Barbara"
+  },
+  "results": [
+    {
+      "entity_id": "B0000000-0000-4000-A000-000000000002",
+      "name": "Testbrand Motors",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "popularity": 0.88,
+      "affinity": 0.951
+    },
+    {
+      "entity_id": "B0000000-0000-4000-A000-000000000001",
+      "name": "Testbrand Coffee",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "popularity": 0.71,
+      "affinity": 0.934,
+      "explainability": {
+        "signal.interests.entities": [
+          {
+            "entity_id": "0A1B2C3D-0000-4000-A000-000000000001",
+            "score": 0.81
+          },
+          {
+            "entity_id": "0A1B2C3D-0000-4000-A000-000000000009",
+            "score": 0.19
+          }
+        ]
+      },
+      "properties": {
+        "short_description": "Synthetic coffee brand",
+        "image": {
+          "url": "https://example.invalid/coffee.jpg"
+        }
+      }
+    }
+  ],
+  "result_count": 2,
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-3",
+    "duration_ms": 12
+  },
+  "provenance": {
+    "source": "Qloo API",
+    "endpoint": "/v2/insights",
+    "documentation": "https://docs.qloo.com/reference/insights-api-deep-dive",
+    "transport": "mcp",
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/v2/insights",
+        "query": {
+          "filter.type": "urn:entity:brand",
+          "signal.interests.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000001",
+            "0A1B2C3D-0000-4000-A000-000000000009"
+          ],
+          "signal.location.query": "Santa Barbara",
+          "feature.explainability": true,
+          "take": 20
+        }
+      }
+    ]
+  }
+}

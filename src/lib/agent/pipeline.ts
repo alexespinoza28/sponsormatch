@@ -1,28 +1,33 @@
-import { QlooApiError } from "@/lib/qloo/client";
-import {
-  averageDemographics,
-  insightDemographics,
-  insightEntities,
-  insightTags,
-  type DemographicProfile,
-} from "@/lib/qloo/normalize";
-import { ENTITY_TYPES, INSIGHT_TYPES, type QlooClient, type QlooEntity, type QlooQuery, type QlooRequestRecord } from "@/lib/qloo/types";
 import { buildPitchEvidence, draftPitches, type DraftOptions } from "@/lib/llm/pitch";
 import {
-  buildBrandEvidence,
-  describeDemographics,
-  pickBrandCategoryTag,
-  pickEntity,
-  toAudienceTags,
-  toLocalPlaces,
-} from "./evidence";
+  averageDemographics,
+  entityAddress,
+  interpretedEntity,
+  issueCandidates,
+  resolutionIssues,
+  resultDemographics,
+  resultEntities,
+  resultTags,
+  type DemographicProfile,
+} from "@/lib/qloo/normalize";
+import type {
+  QlooEnvelope,
+  QlooResultEntity,
+  QlooToolCallRecord,
+  QlooToolInputs,
+  QlooTools,
+  SearchEntityType,
+} from "@/lib/qloo/types";
+import { buildBrandEvidence, describeDemographics, pickBrandCategoryTag, toAudienceTags, toHotspots } from "./evidence";
 import type {
   AgentEvent,
   AgentResult,
   AudienceProfile,
+  AudienceTag,
   BrandEvidence,
+  Choice,
   EventInput,
-  LocalPlace,
+  Hotspot,
   Resolution,
   ResolvedEntity,
   StepEvent,
@@ -38,15 +43,23 @@ export class AgentError extends Error {
   }
 }
 
-/** Collects Qloo request records so each step can report the calls it made. */
-export class RequestLog {
-  #pending: QlooRequestRecord[] = [];
+/** Thrown when Qloo rejects the credential: the run stops. */
+export class QlooAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "QlooAuthError";
+  }
+}
+
+/** Collects MCP tool-call records so each step can report the calls it made. */
+export class CallLog {
+  #pending: QlooToolCallRecord[] = [];
   total = 0;
-  readonly push = (record: QlooRequestRecord) => {
+  readonly push = (record: QlooToolCallRecord) => {
     this.#pending.push(record);
     this.total += 1;
   };
-  drain(): QlooRequestRecord[] {
+  drain(): QlooToolCallRecord[] {
     const out = this.#pending;
     this.#pending = [];
     return out;
@@ -54,14 +67,18 @@ export class RequestLog {
 }
 
 export interface AgentDeps {
-  qloo: QlooClient;
-  log: RequestLog;
+  qloo: QlooTools;
+  log: CallLog;
   emit: (event: AgentEvent) => void;
   llm: DraftOptions & { enabled: boolean };
-  /** Brands that get full evidence (demographics + local presence). */
+  /** Recommended brands that get full evidence (tags + demographics). */
   topN?: number;
+  /** Brands that also get a qloo_where_popular heatmap. */
+  hotspotN?: number;
   /** Brands that get a pitch draft. */
   pitchN?: number;
+  /** Parallel MCP tool calls. */
+  concurrency?: number;
 }
 
 const STEP_TITLES: Record<StepId, string> = {
@@ -72,306 +89,402 @@ const STEP_TITLES: Record<StepId, string> = {
   draft: "Draft sponsor pitches",
 };
 
-function isFatal(error: unknown): boolean {
-  return error instanceof QlooApiError && (error.code === "QLOO_AUTH" || error.code === "QLOO_AUTH_BLOCKED");
-}
-
-/** Runs an optional lookup; auth failures still abort the whole run. */
-async function soft<T>(work: Promise<T>, onError: (message: string) => void): Promise<T | undefined> {
-  try {
-    return await work;
-  } catch (error) {
-    if (isFatal(error)) throw error;
-    onError(error instanceof Error ? error.message : String(error));
-    return undefined;
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]!, i);
+    }
   }
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return out;
 }
 
 function fmt(n: number | undefined, digits = 2): string {
   return n === undefined ? "n/a" : n.toFixed(digits);
 }
 
+const ID_PATTERN = /^[A-Za-z0-9:_-]{8,80}$/;
+
 export function validateInput(raw: unknown): EventInput {
   const body = (raw ?? {}) as Record<string, unknown>;
-  const performers = (Array.isArray(body.performers) ? body.performers : String(body.performers ?? "").split(/\n|,/))
-    .map((p) => String(p).trim())
-    .filter(Boolean)
-    .slice(0, 5);
+  const list = (v: unknown, max: number) =>
+    (Array.isArray(v) ? v : String(v ?? "").split(/\n|,/))
+      .map((p) => String(p).trim())
+      .filter(Boolean)
+      .slice(0, max);
   const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const performers = list(body.performers, 5);
+  const brands = list(body.brands, 5);
   const city = text(body.city, 80);
   const date = text(body.date, 10);
   if (!performers.length) throw new AgentError("resolve", "Add at least one performer.");
   if (!city) throw new AgentError("resolve", "Add the event's city.");
-  if (performers.some((p) => p.length > 100)) throw new AgentError("resolve", "Performer names must be under 100 characters.");
+  if ([...performers, ...brands].some((p) => p.length > 100)) throw new AgentError("resolve", "Names must be under 100 characters.");
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new AgentError("resolve", "Date must be YYYY-MM-DD.");
+  const pins: Record<string, string> = {};
+  if (body.pins && typeof body.pins === "object" && !Array.isArray(body.pins)) {
+    for (const [k, v] of Object.entries(body.pins as Record<string, unknown>).slice(0, 12)) {
+      if (typeof v === "string" && ID_PATTERN.test(v) && k.length <= 100) pins[k] = v;
+    }
+  }
   return {
     performers,
     city,
     venue: text(body.venue, 100) || undefined,
     date: date || undefined,
     category: text(body.category, 60) || undefined,
+    brands: brands.length ? brands : undefined,
+    pins: Object.keys(pins).length ? pins : undefined,
   };
+}
+
+/** Per-step bookkeeping for envelope statuses. */
+class StepNotes {
+  decisions: string[] = [];
+  warnings: string[] = [];
+  choices: Choice[] = [];
+
+  /**
+   * Classifies an envelope. partial/degraded count as usable but their summary
+   * is surfaced; QLOO_AUTH stops the run; other errors are reported and skipped.
+   */
+  check(env: QlooEnvelope, label: string): "ok" | "empty" | "needs_input" | "error" {
+    for (const w of env.warnings ?? []) this.warnings.push(`${label}: ${w}`);
+    switch (env.status) {
+      case "ok":
+        return "ok";
+      case "partial":
+      case "degraded":
+        this.warnings.push(`${label} (${env.status}): ${env.summary ?? "reduced result"}`);
+        return "ok";
+      case "empty":
+        this.decisions.push(`${label}: Qloo returned no results${env.summary ? ` (${env.summary})` : ""}.`);
+        return "empty";
+      case "needs_input":
+        return "needs_input";
+      case "error":
+      default: {
+        const code = env.error?.code ?? "UNKNOWN";
+        if (code === "QLOO_AUTH" || code === "QLOO_AUTH_BLOCKED") {
+          throw new QlooAuthError(`${env.summary ?? "Qloo rejected the credential."} ${env.error?.recovery ?? ""}`.trim());
+        }
+        this.decisions.push(`${label} failed (${code}): ${env.summary ?? "error"}${env.error?.recovery ? ` Recovery: ${env.error.recovery}` : ""}`);
+        return "error";
+      }
+    }
+  }
 }
 
 export async function runAgent(input: EventInput, deps: AgentDeps): Promise<AgentResult> {
   const { qloo, log, emit } = deps;
-  const topN = deps.topN ?? 6;
+  const topN = deps.topN ?? 5;
+  const hotspotN = deps.hotspotN ?? 3;
   const pitchN = deps.pitchN ?? 5;
+  const concurrency = deps.concurrency ?? 4;
+  const pins = input.pins ?? {};
   let current: StepId = "resolve";
 
   const start = (step: StepId) => {
     current = step;
     log.drain();
     emit({ type: "step", step, status: "running", title: STEP_TITLES[step] });
+    return new StepNotes();
   };
-  const finish = (step: StepId, summary: string, decisions: string[], status: StepEvent["status"] = "done") => {
-    emit({ type: "step", step, status, title: STEP_TITLES[step], summary, decisions, requests: log.drain() });
+  const finish = (step: StepId, summary: string, notes: StepNotes, status: StepEvent["status"] = "done") => {
+    emit({
+      type: "step",
+      step,
+      status,
+      title: STEP_TITLES[step],
+      summary,
+      decisions: notes.decisions,
+      warnings: notes.warnings.length ? notes.warnings : undefined,
+      choices: notes.choices.length ? notes.choices : undefined,
+      calls: log.drain(),
+    });
   };
+
+  /** qloo_describe with needs_input handling; continues with the top candidate and records the choice. */
+  async function resolveEntity(notes: StepNotes, text: string, type: SearchEntityType, field: Choice["field"]): Promise<ResolvedEntity | undefined> {
+    const pinned = pins[text];
+    const env = await qloo.call("qloo_describe", { entity: pinned ?? text, type });
+    const status = notes.check(env, `Describe "${text}"`);
+    if (status === "ok") {
+      const e = interpretedEntity(env);
+      const r = resultEntities(env)[0];
+      const id = e?.entityId ?? r?.entity_id;
+      const name = e?.name ?? r?.name;
+      if (!id || !name) return undefined;
+      return {
+        input: text,
+        id,
+        name,
+        type: r?.subtype ?? e?.type ?? type,
+        match: pinned ? "confirmed" : (e?.match ?? "resolved"),
+        popularity: r?.popularity,
+        address: r ? entityAddress(r) : undefined,
+        alternatives: [],
+      };
+    }
+    if (status === "needs_input") {
+      const issue = resolutionIssues(env)[0];
+      const candidates = issue ? issueCandidates(issue) : [];
+      const choice: Choice = { field, input: text, kind: issue?.kind ?? "needs_input", candidates };
+      notes.choices.push(choice);
+      const top = candidates[0];
+      if (top) {
+        choice.chosen = { id: top.id, name: top.name };
+        notes.decisions.push(`"${text}" is ${choice.kind}; continuing with the first candidate, ${top.name}. Pick another in the list to re-run.`);
+        return {
+          input: text,
+          id: top.id,
+          name: top.name,
+          type: top.type ?? type,
+          match: "agent_pick",
+          popularity: top.popularity,
+          alternatives: candidates.slice(1).map((c) => ({ id: c.id, name: c.name, popularity: c.popularity })),
+        };
+      }
+      notes.decisions.push(`"${text}" needs input (${env.summary ?? choice.kind}) and Qloo offered no candidates.`);
+    }
+    return undefined;
+  }
 
   try {
     // 1. RESOLVE ---------------------------------------------------------------
-    start("resolve");
-    const decisions: string[] = [];
-    const performerResults = await Promise.all(
-      input.performers.map(async (name) => {
-        const res = await soft(qloo.search({ query: name, types: [ENTITY_TYPES.artist], take: 5 }), (m) =>
-          decisions.push(`Search for "${name}" failed (${m}); skipping it.`),
-        );
-        return res ? pickEntity(name, res) : undefined;
-      }),
-    );
+    let notes = start("resolve");
+    const performerResults = await mapLimit(input.performers, concurrency, (p) => resolveEntity(notes, p, "artist", "performer"));
     const performers: ResolvedEntity[] = [];
     const unresolved: string[] = [];
     performerResults.forEach((p, i) => {
       const name = input.performers[i]!;
       if (!p) {
         unresolved.push(name);
-        decisions.push(`"${name}": no Qloo artist found; left out of the signals.`);
+        notes.decisions.push(`"${name}": no Qloo artist; left out of the signals.`);
       } else if (performers.some((x) => x.id === p.id)) {
-        decisions.push(`"${name}" resolved to ${p.name}, already in the lineup; deduplicated.`);
+        notes.decisions.push(`"${name}" resolved to ${p.name}, already in the lineup; deduplicated.`);
       } else {
         performers.push(p);
-        decisions.push(
-          p.match === "exact"
-            ? `"${name}" -> ${p.name} (exact match, popularity ${fmt(p.popularity)}).`
-            : `"${name}" -> ${p.name} (best guess; alternatives: ${p.alternatives.map((a) => a.name).join(", ") || "none"}).`,
-        );
+        if (p.match !== "agent_pick") notes.decisions.push(`"${name}" -> ${p.name} (${p.match}, popularity ${fmt(p.popularity)}).`);
       }
     });
 
-    const [localityRes, venueRes, categoryRes] = await Promise.all([
-      soft(qloo.search({ query: input.city, types: [ENTITY_TYPES.locality], take: 3 }), (m) =>
-        decisions.push(`Locality lookup failed (${m}); using the city name as a text location.`),
-      ),
-      input.venue
-        ? soft(qloo.search({ query: input.venue, types: [ENTITY_TYPES.place], "filter.address": input.city, take: 5 }), (m) =>
-            decisions.push(`Venue lookup failed (${m}).`),
-          )
-        : Promise.resolve(undefined),
-      input.category
-        ? soft(qloo.tags({ "filter.query": input.category, "filter.parents.types": [ENTITY_TYPES.brand], take: 10 }), (m) =>
-            decisions.push(`Category tag lookup failed (${m}); ranking all brand categories.`),
-          )
-        : Promise.resolve(undefined),
+    const [locality, venue, categoryEnv] = await Promise.all([
+      resolveEntity(notes, input.city, "locality", "city"),
+      input.venue ? resolveEntity(notes, input.venue, "place", "venue") : Promise.resolve(undefined),
+      input.category ? qloo.call("qloo_find_tags", { query: input.category, limit: 10 }) : Promise.resolve(undefined),
     ]);
-
-    const locality = localityRes ? pickEntity(input.city, localityRes) : undefined;
-    decisions.push(
+    const signalLocation = locality?.name ?? input.city;
+    notes.decisions.push(
       locality
-        ? `City "${input.city}" -> locality ${locality.name} (${locality.match === "exact" ? "exact" : "best guess"}); used as signal.location.`
-        : `City "${input.city}" not resolved to a locality; using signal.location.query="${input.city}".`,
+        ? `City "${input.city}" -> ${locality.name}; passed to Qloo as signal_location.`
+        : `City "${input.city}" not resolved; passing the text as signal_location.`,
     );
-
-    let venue: ResolvedEntity | undefined;
     if (input.venue) {
-      let picked = venueRes ? pickEntity(input.venue, venueRes, { preferAddress: input.city }) : undefined;
-      if (!picked && venueRes) {
-        decisions.push(`No venue named "${input.venue}" with an address in ${input.city}; retrying without the address filter.`);
-        const retry = await soft(qloo.search({ query: input.venue, types: [ENTITY_TYPES.place], take: 5 }), () => undefined);
-        picked = retry ? pickEntity(input.venue, retry, { preferAddress: input.city }) : undefined;
-      }
-      venue = picked;
-      decisions.push(
-        venue
-          ? `Venue "${input.venue}" -> ${venue.name}${venue.address ? ` (${venue.address})` : ""}; added as a signal.`
-          : `Venue "${input.venue}" not found in Qloo; continuing with performers only.`,
-      );
+      notes.decisions.push(venue ? `Venue "${input.venue}" -> ${venue.name}; added as a signal.` : `Venue "${input.venue}" not found; using performers only.`);
     }
 
     let category: Resolution["category"];
-    if (input.category && categoryRes) {
-      const tag = pickBrandCategoryTag(insightTags(categoryRes));
+    if (input.category && categoryEnv) {
+      const status = notes.check(categoryEnv, `Find tags "${input.category}"`);
+      const tags = status === "ok" ? resultTags(categoryEnv) : [];
+      const tag = pickBrandCategoryTag(tags);
       if (tag) {
         category = { input: input.category, ...tag };
-        decisions.push(`Category "${input.category}" -> brand tag ${tag.name} (${tag.id}); used as filter.tags.`);
+        notes.decisions.push(`Category "${input.category}" -> ${tag.name} (${tag.id}); used as include_tags.`);
       } else {
-        decisions.push(`No brand-genre tag matched "${input.category}"; ranking all brand categories.`);
+        notes.decisions.push(`No brand-genre tag matched "${input.category}"; ranking all brand categories.`);
+        if (tags.length) {
+          notes.choices.push({
+            field: "category",
+            input: input.category,
+            kind: "no_brand_tag",
+            candidates: tags.slice(0, 5).map((t) => ({ id: t.id, name: t.name, type: t.type })),
+          });
+        }
       }
     }
 
     if (!performers.length) {
-      finish("resolve", "No performers could be matched to Qloo artists.", decisions, "error");
+      finish("resolve", "No performers could be matched to Qloo artists.", notes, "error");
       throw new AgentError("resolve", "None of the performers matched a Qloo artist. Check spelling or try a better-known act.");
     }
-    const resolution: Resolution = { performers, unresolved, venue, locality, category };
+    const resolution: Resolution = { performers, unresolved, choices: [...notes.choices], venue, locality, category };
     finish(
       "resolve",
-      `${performers.length} performer${performers.length > 1 ? "s" : ""} resolved${venue ? ", venue found" : ""}${locality ? `, city -> ${locality.name}` : ""}.`,
-      decisions,
+      `${performers.length} performer${performers.length > 1 ? "s" : ""} resolved${venue ? ", venue found" : ""}${locality ? `, city -> ${locality.name}` : ""}${notes.choices.length ? `; ${notes.choices.length} input${notes.choices.length > 1 ? "s" : ""} need confirmation` : ""}.`,
+      notes,
     );
 
-    const signalIds = [...performers.map((p) => p.id), ...(venue ? [venue.id] : [])];
     const performerIds = performers.map((p) => p.id);
-    const location: QlooQuery = locality ? { "signal.location": locality.id } : { "signal.location.query": input.city };
-    const placeFilter: QlooQuery = locality ? { "filter.location": locality.id } : { "filter.location.query": input.city };
+    const signalIds = [...performerIds, ...(venue ? [venue.id] : [])];
 
     // 2. PROFILE ---------------------------------------------------------------
-    start("profile");
-    const profileDecisions: string[] = [];
-    const tagQuery: QlooQuery = {
-      "filter.type": INSIGHT_TYPES.tag,
-      "signal.interests.entities": signalIds,
-      "filter.parents.types": [ENTITY_TYPES.brand],
-      take: 25,
-    };
-    const [demoRes, tagRes] = await Promise.all([
-      soft(qloo.insights({ "filter.type": INSIGHT_TYPES.demographics, "signal.interests.entities": performerIds }), (m) =>
-        profileDecisions.push(`Demographics unavailable (${m}); fit score will skip demographic alignment.`),
-      ),
-      soft(qloo.insights({ ...tagQuery, ...location }), (m) => profileDecisions.push(`Localized taste tags failed (${m}).`)),
+    notes = start("profile");
+    const [demoEnvs, tagEnv] = await Promise.all([
+      mapLimit(performers, concurrency, (p) => qloo.call("qloo_audience_demographics", { entity: p.id, entity_type: "artist" })),
+      qloo.call("qloo_entity_tags", { entities: signalIds, limit: 20 }),
     ]);
-    let tagRows = tagRes ? insightTags(tagRes) : [];
-    if (!tagRows.length) {
-      profileDecisions.push("No localized brand taste tags came back; retrying without the location signal.");
-      const retry = await soft(qloo.insights(tagQuery), (m) => profileDecisions.push(`Retry failed (${m}).`));
-      tagRows = retry ? insightTags(retry) : [];
-    }
-    const audienceDemo: DemographicProfile | undefined = demoRes
-      ? averageDemographics(insightDemographics(demoRes).filter((r) => performerIds.includes(r.entity_id)))
-      : undefined;
-    const audience: AudienceProfile = { demographics: audienceDemo, tags: toAudienceTags(tagRows) };
-    const demoText = describeDemographics(audienceDemo);
-    if (audience.tags.length) {
-      profileDecisions.push(
-        `Top audience brand-taste tags: ${audience.tags
-          .slice(0, 5)
-          .map((t) => `${t.name} (${fmt(t.affinity)})`)
-          .join(", ")}.`,
-      );
-    }
-    if (demoText.topAge) profileDecisions.push(`Audience skews ${demoText.topAge}, ${demoText.genderLean}.`);
-    finish(
-      "profile",
-      `${audience.tags.length} taste tags${audienceDemo ? " and an age/gender affinity profile" : ""} for this lineup in ${locality?.name ?? input.city}.`,
-      profileDecisions,
+    const demoRows = demoEnvs.flatMap((env, i) =>
+      notes.check(env, `Demographics for ${performers[i]!.name}`) === "ok"
+        ? resultDemographics(env).filter((r) => r.entity_id === performers[i]!.id || resultDemographics(env).length === 1)
+        : [],
     );
+    const audienceDemo = averageDemographics(demoRows);
+    const audienceTags: AudienceTag[] = notes.check(tagEnv, "Audience taste tags") === "ok" ? toAudienceTags(resultTags(tagEnv)) : [];
+    const audience: AudienceProfile = { demographics: audienceDemo, tags: audienceTags };
+    const demoText = describeDemographics(audienceDemo);
+    if (audienceTags.length) {
+      notes.decisions.push(`Top audience taste tags: ${audienceTags.slice(0, 5).map((t) => `${t.name} (${fmt(t.affinity)})`).join(", ")}.`);
+    }
+    if (demoText.topAge) notes.decisions.push(`Audience skews ${demoText.topAge}, ${demoText.genderLean}.`);
+    if (!audienceDemo) notes.decisions.push("No demographics; sponsor fit will skip demographic alignment.");
+    finish("profile", `${audienceTags.length} taste tags${audienceDemo ? " and an age/gender affinity profile" : ""} for this lineup.`, notes);
 
     // 3. RANK ------------------------------------------------------------------
-    start("rank");
-    const rankDecisions: string[] = [];
-    const baseBrandQuery: QlooQuery = {
-      "filter.type": ENTITY_TYPES.brand,
-      "signal.interests.entities": signalIds,
-      "feature.explainability": true,
-      take: 20,
-    };
-    const attempts: Array<{ query: QlooQuery; label: string }> = [
-      { query: { ...baseBrandQuery, ...location, ...(category ? { "filter.tags": [category.id] } : {}) }, label: "with location" },
-      { query: { ...baseBrandQuery, ...(category ? { "filter.tags": [category.id] } : {}) }, label: "without location" },
+    notes = start("rank");
+    const base: QlooToolInputs["qloo_recommend"] = { target_type: "brand", signals: signalIds, explain: true, limit: 20 };
+    const attempts: Array<{ args: QlooToolInputs["qloo_recommend"]; label: string }> = [
+      { args: { ...base, signal_location: signalLocation, ...(category ? { include_tags: [category.id] } : {}) }, label: `in ${signalLocation}${category ? ` within ${category.name}` : ""}` },
     ];
-    if (category) attempts.push({ query: baseBrandQuery, label: "without location or category" });
-    let brandEntities: QlooEntity[] = [];
+    if (category) attempts.push({ args: { ...base, signal_location: signalLocation }, label: `in ${signalLocation}, any category` });
+    attempts.push({ args: base, label: "without location" });
+    let recommended: QlooResultEntity[] = [];
     for (const [i, attempt] of attempts.entries()) {
-      const res = await soft(qloo.insights(attempt.query), (m) => rankDecisions.push(`Brand insights ${attempt.label} failed (${m}).`));
-      brandEntities = res ? insightEntities(res) : [];
-      if (brandEntities.length) {
-        if (i > 0) rankDecisions.push(`Got ${brandEntities.length} brands ${attempt.label}.`);
+      const env = await qloo.call("qloo_recommend", attempt.args);
+      const status = notes.check(env, `Recommend brands ${attempt.label}`);
+      if (status === "needs_input") {
+        for (const issue of resolutionIssues(env)) {
+          notes.choices.push({ field: issue.input_kind === "tag" ? "category" : "performer", input: issue.input, kind: issue.kind, candidates: issueCandidates(issue) });
+        }
+        notes.decisions.push(`Recommend ${attempt.label} needs input: ${env.summary ?? "ambiguous input"}.`);
+      }
+      recommended = status === "ok" ? resultEntities(env) : [];
+      if (recommended.length) {
+        notes.decisions.push(`${recommended.length} brands recommended ${attempt.label}.`);
         break;
       }
-      if (i < attempts.length - 1) rankDecisions.push(`No brands ${attempt.label}; relaxing the query.`);
+      if (i < attempts.length - 1) notes.decisions.push(`No brands ${attempt.label}; relaxing the query.`);
     }
-    if (!brandEntities.length) {
-      finish("rank", "Qloo returned no brands for these signals.", rankDecisions, "error");
+
+    let requested: QlooResultEntity[] = [];
+    if (input.brands?.length) {
+      let options = input.brands.map((b) => pins[b] ?? b);
+      for (let attempt = 1; attempt <= 2 && options.length; attempt += 1) {
+        const env = await qloo.call("qloo_rank", { options, option_type: "brand", signals: signalIds, signal_location: signalLocation });
+        const status = notes.check(env, `Rank your brands (${options.length})`);
+        if (status === "ok") {
+          requested = resultEntities(env);
+          notes.decisions.push(`Ranked your brands: ${requested.map((b) => `${b.name} (${fmt(b.affinity)})`).join(", ")}.`);
+          break;
+        }
+        if (status !== "needs_input") break;
+        const issues = resolutionIssues(env).filter((i) => i.field === "options");
+        for (const issue of issues) notes.choices.push({ field: "brand", input: issue.input, kind: issue.kind, candidates: issueCandidates(issue) });
+        const bad = new Set(issues.map((i) => i.input));
+        const next = options.filter((o) => !bad.has(o));
+        if (!bad.size || next.length === options.length) break;
+        notes.decisions.push(`Qloo could not match ${[...bad].map((b) => `"${b}"`).join(", ")}; ranking the rest.`);
+        options = next;
+      }
+    }
+
+    const sources = new Map<string, BrandEvidence["source"]>();
+    const candidates: QlooResultEntity[] = [];
+    for (const b of recommended.slice(0, topN)) {
+      sources.set(b.entity_id, "recommended");
+      candidates.push(b);
+    }
+    for (const b of requested) {
+      if (sources.has(b.entity_id)) sources.set(b.entity_id, "both");
+      else {
+        sources.set(b.entity_id, "requested");
+        candidates.push(b);
+      }
+    }
+    if (!candidates.length) {
+      finish("rank", "Qloo returned no brands for these signals.", notes, "error");
       throw new AgentError("rank", "Qloo returned no brand affinities for this lineup.");
     }
-    rankDecisions.push(
-      `Top by Qloo affinity: ${brandEntities
-        .slice(0, 5)
-        .map((b) => `${b.name} (${fmt(b.query?.affinity ?? (b.affinity as number | undefined))})`)
-        .join(", ")}.`,
-    );
-    finish("rank", `${brandEntities.length} brands ranked by affinity to the lineup${category ? ` in ${category.name}` : ""}.`, rankDecisions);
+    notes.decisions.push(`Top by Qloo affinity: ${recommended.slice(0, 5).map((b) => `${b.name} (${fmt(b.affinity)})`).join(", ") || "none"}.`);
+    finish("rank", `${recommended.length} brands recommended${requested.length ? `, ${requested.length} of yours ranked` : ""}.`, notes);
 
     // 4. EXPLAIN ---------------------------------------------------------------
-    start("explain");
-    const explainDecisions: string[] = [];
-    const top = brandEntities.slice(0, topN);
-    const topIds = top.map((b) => b.entity_id);
-    const [brandDemoRes, ...placeResults] = await Promise.all([
-      soft(qloo.insights({ "filter.type": INSIGHT_TYPES.demographics, "signal.interests.entities": topIds }), (m) =>
-        explainDecisions.push(`Brand demographics unavailable (${m}).`),
-      ),
-      ...top.map((b) =>
-        soft(
-          qloo.insights({
-            "filter.type": ENTITY_TYPES.place,
-            "filter.references_brand": [b.entity_id],
-            ...placeFilter,
-            "signal.interests.entities": performerIds,
-            take: 3,
-          }),
-          (m) => explainDecisions.push(`Local presence check for ${b.name} failed (${m}).`),
-        ),
-      ),
-    ]);
+    notes = start("explain");
+    const brandTags = new Map<string, AudienceTag[]>();
     const brandDemographics = new Map<string, DemographicProfile>();
-    for (const row of brandDemoRes ? insightDemographics(brandDemoRes) : []) {
-      const avg = averageDemographics([row]);
-      if (avg) brandDemographics.set(row.entity_id, avg);
-    }
-    const localPresence = new Map<string, LocalPlace[]>();
-    top.forEach((b, i) => {
-      const res = placeResults[i];
-      if (res) localPresence.set(b.entity_id, toLocalPlaces(insightEntities(res)));
+    const hotspots = new Map<string, Hotspot[]>();
+    const hotspotIds = new Set(
+      [...candidates]
+        .sort((a, b) => (b.affinity ?? 0) - (a.affinity ?? 0))
+        .slice(0, hotspotN)
+        .map((b) => b.entity_id),
+    );
+    type Job = { kind: "tags" | "demo" | "hot"; brand: QlooResultEntity };
+    const jobs: Job[] = candidates.flatMap((b) => [
+      { kind: "tags" as const, brand: b },
+      { kind: "demo" as const, brand: b },
+      ...(hotspotIds.has(b.entity_id) ? [{ kind: "hot" as const, brand: b }] : []),
+    ]);
+    await mapLimit(jobs, concurrency, async ({ kind, brand }) => {
+      if (kind === "tags") {
+        const env = await qloo.call("qloo_entity_tags", { entities: [brand.entity_id], entity_type: "brand", limit: 15 });
+        if (notes.check(env, `Tags for ${brand.name}`) === "ok") brandTags.set(brand.entity_id, toAudienceTags(resultTags(env), 15));
+      } else if (kind === "demo") {
+        const env = await qloo.call("qloo_audience_demographics", { entity: brand.entity_id, entity_type: "brand" });
+        const avg = notes.check(env, `Demographics for ${brand.name}`) === "ok" ? averageDemographics(resultDemographics(env)) : undefined;
+        if (avg) brandDemographics.set(brand.entity_id, avg);
+      } else {
+        const env = await qloo.call("qloo_where_popular", { entity: brand.entity_id, entity_type: "brand", within: signalLocation, limit: 3 });
+        const status = notes.check(env, `Hotspots for ${brand.name} in ${signalLocation}`);
+        hotspots.set(brand.entity_id, status === "ok" && Array.isArray(env.results) ? toHotspots(env.results) : []);
+      }
     });
-    const brands: BrandEvidence[] = buildBrandEvidence({
-      brands: top,
-      audienceTags: audience.tags,
+    const brands = buildBrandEvidence({
+      brands: candidates,
+      audienceTags,
       audienceDemographics: audienceDemo,
       brandDemographics,
-      localPresence,
+      brandTags,
+      hotspots,
+      sources,
+      qlooOrder: recommended.map((b) => b.entity_id),
       performers,
       venue,
     });
     for (const b of brands) {
-      explainDecisions.push(
+      notes.decisions.push(
         `${b.name}: fit ${b.sponsorFit} = affinity ${fmt(b.qlooAffinity)}, tag overlap ${fmt(b.tagOverlapScore)} (${b.overlappingTags.length} shared)` +
           `${b.demographicAlignment !== undefined ? `, demo alignment ${fmt(b.demographicAlignment)}` : ""}` +
-          `${b.localPresence.length ? `, ${b.localPresence.length} local location${b.localPresence.length > 1 ? "s" : ""}` : ""}.`,
+          `${b.hotspots.length ? `, ${b.hotspots.length} local hotspot${b.hotspots.length > 1 ? "s" : ""}` : ""}.`,
       );
     }
-    const moved = brands.filter((b) => b.rank !== b.qlooRank).length;
-    if (moved) explainDecisions.push(`${moved} brands re-ordered from raw Qloo affinity by audience-specific evidence.`);
-    finish("explain", `Evidence built for the top ${brands.length} brands.`, explainDecisions);
+    const moved = brands.filter((b) => b.source !== "requested" && b.rank !== b.qlooRank).length;
+    if (moved) notes.decisions.push(`${moved} brands re-ordered from raw Qloo affinity by audience-specific evidence.`);
+    finish("explain", `Evidence built for ${brands.length} brands.`, notes);
 
     // 5. DRAFT -----------------------------------------------------------------
-    start("draft");
+    notes = start("draft");
     const toPitch = brands.slice(0, pitchN);
     const pitches = await draftPitches(
       toPitch.map((b) => ({ brandId: b.id, evidence: buildPitchEvidence(input, b, audience) })),
       deps.llm.enabled ? deps.llm : { ...deps.llm, apiKey: undefined },
     );
-    const draftDecisions = pitches.map((p) => {
+    for (const p of pitches) {
       const name = toPitch.find((b) => b.id === p.brandId)?.name ?? p.brandId;
-      return p.source === "nemotron" ? `${name}: drafted by ${p.model}.` : `${name}: template draft${p.note ? ` (${p.note})` : ""}.`;
-    });
+      notes.decisions.push(p.source === "nemotron" ? `${name}: drafted by ${p.model}.` : `${name}: template draft${p.note ? ` (${p.note})` : ""}.`);
+    }
     const nemotronCount = pitches.filter((p) => p.source === "nemotron").length;
     finish(
       "draft",
       nemotronCount ? `${nemotronCount} of ${pitches.length} pitches drafted by Nemotron from evidence only.` : `${pitches.length} template pitches drafted from evidence.`,
-      draftDecisions,
+      notes,
     );
 
+    resolution.choices = [...resolution.choices];
     const result: AgentResult = {
       input,
       mode: { qloo: qloo.mode, llm: deps.llm.enabled ? "nemotron" : "template", model: deps.llm.enabled ? deps.llm.model : undefined },
@@ -379,7 +492,7 @@ export async function runAgent(input: EventInput, deps: AgentDeps): Promise<Agen
       audience,
       brands,
       pitches,
-      requestCount: log.total,
+      toolCallCount: log.total,
     };
     emit({ type: "result", result });
     return result;
@@ -387,8 +500,8 @@ export async function runAgent(input: EventInput, deps: AgentDeps): Promise<Agen
     const message =
       error instanceof AgentError
         ? error.message
-        : isFatal(error)
-          ? "Qloo rejected the API key. Check QLOO_API_KEY (hackathon keys only work on hackathon.api.qloo.com)."
+        : error instanceof QlooAuthError
+          ? `Qloo rejected the credential, so the agent stopped and will not call Qloo again for five minutes. ${error.message}`
           : error instanceof Error
             ? error.message
             : "Unexpected error";

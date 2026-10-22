@@ -1,100 +1,39 @@
 import {
-  entityAddress,
-  entityAffinity,
   entityDescription,
-  entityExplainability,
   entityImage,
-  entityProperty,
+  explainabilityScores,
   round,
-  searchResults,
-  tagAffinity,
-  tagId,
   type DemographicProfile,
 } from "@/lib/qloo/normalize";
-import type { QlooEntity, QlooSearchResponse, QlooTag } from "@/lib/qloo/types";
+import type { QlooResultEntity, QlooResultTag } from "@/lib/qloo/types";
 import { AGE_BUCKETS } from "@/lib/qloo/types";
-import type { AudienceTag, BrandEvidence, Contributor, LocalPlace, ResolvedEntity } from "./types";
+import type { AudienceTag, BrandEvidence, Contributor, Hotspot, ResolvedEntity } from "./types";
 
-// Pure ranking and evidence logic. No I/O here, so every rule is unit-tested.
+// Pure ranking and evidence logic over harness tool results. No I/O here.
 
 export const FIT_WEIGHTS = { affinity: 0.6, tags: 0.25, demographics: 0.15 } as const;
 
-const EVENT_OCCASION_PATTERN = /concert|festival|event|music|nightlife|night out|live|celebration|party|outdoor/i;
-
-export function normalizeName(s: string): string {
-  return s
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/^the /, "")
-    .trim();
+/** Picks a tag in the brand genre taxonomy (urn:tag:genre:brand...) from qloo_find_tags results. */
+export function pickBrandCategoryTag(tags: QlooResultTag[]): { id: string; name: string } | undefined {
+  const t = tags.find((x) => x.id.startsWith("urn:tag:genre:brand"));
+  return t ? { id: t.id, name: t.name } : undefined;
 }
 
-/**
- * Picks the entity for a free-text input from /search results: a unique exact
- * (normalized) name match wins; otherwise the first result is a best guess and
- * the rest are kept as alternatives for the UI. When `preferAddress` is given,
- * candidates whose address contains it are tried first.
- */
-export function pickEntity(
-  input: string,
-  response: QlooSearchResponse,
-  options: { preferAddress?: string } = {},
-): ResolvedEntity | undefined {
-  let candidates = searchResults(response).filter((e) => e && e.entity_id && e.name);
-  if (!candidates.length) return undefined;
-  if (options.preferAddress) {
-    const want = normalizeName(options.preferAddress);
-    const local = candidates.filter((c) => normalizeName(entityAddress(c) ?? "").includes(want));
-    if (local.length) candidates = [...local, ...candidates.filter((c) => !local.includes(c))];
-  }
-  const target = normalizeName(input);
-  let exact = candidates.filter((c) => normalizeName(c.name) === target);
-  if (exact.length > 1 && options.preferAddress) {
-    const want = normalizeName(options.preferAddress);
-    const localExact = exact.filter((c) => normalizeName(entityAddress(c) ?? "").includes(want));
-    if (localExact.length) exact = localExact;
-  }
-  const chosen = exact.length === 1 ? exact[0]! : candidates[0]!;
-  return {
-    input,
-    id: chosen.entity_id,
-    name: chosen.name,
-    type: chosen.subtype ?? chosen.type ?? "urn:entity",
-    match: exact.length === 1 ? "exact" : "best_guess",
-    popularity: chosen.popularity,
-    address: entityAddress(chosen),
-    alternatives: candidates
-      .filter((c) => c.entity_id !== chosen.entity_id)
-      .slice(0, 3)
-      .map((c) => ({ id: c.entity_id, name: c.name, popularity: c.popularity })),
-  };
-}
-
-/** Prefers a tag in the brand genre taxonomy (urn:tag:genre:brand...). */
-export function pickBrandCategoryTag(tags: QlooTag[]): { id: string; name: string } | undefined {
-  const withIds = tags.map((t) => ({ id: tagId(t), name: t.name })).filter((t): t is { id: string; name: string } => !!t.id);
-  return withIds.find((t) => t.id.startsWith("urn:tag:genre:brand")) ?? undefined;
-}
-
-export function toAudienceTags(tags: QlooTag[], limit = 15): AudienceTag[] {
+/** qloo_entity_tags results -> deduped tags with affinity, strongest first. */
+export function toAudienceTags(tags: QlooResultTag[], limit = 20): AudienceTag[] {
   const seen = new Set<string>();
   const out: AudienceTag[] = [];
   for (const t of tags) {
-    const id = tagId(t);
-    const affinity = tagAffinity(t);
-    if (!id || affinity === undefined || seen.has(id)) continue;
-    seen.add(id);
-    out.push({ id, name: t.name, subtype: t.subtype, affinity: round(affinity, 3) });
+    if (typeof t.affinity !== "number" || !Number.isFinite(t.affinity) || seen.has(t.id)) continue;
+    seen.add(t.id);
+    out.push({ id: t.id, name: t.name, subtype: t.type, affinity: round(t.affinity, 3) });
   }
   return out.sort((a, b) => b.affinity - a.affinity).slice(0, limit);
 }
 
 /**
- * Average audience affinity across the brand's tags (tags the audience profile
- * does not contain count as 0). 1.0 means every brand tag is a top audience tag
+ * Average audience affinity across the brand's tags (brand tags missing from
+ * the audience profile count as 0). 1.0 = every brand tag is an audience tag
  * with affinity 1.
  */
 export function tagOverlap(
@@ -131,14 +70,11 @@ export function demographicAlignment(a?: DemographicProfile, b?: DemographicProf
 /**
  * Sponsor fit, 0-100: weighted blend of Qloo affinity, audience tag overlap and
  * demographic alignment (mapped from [-1,1] to [0,1]). Missing components are
- * dropped and the remaining weights renormalized, so a brand is never
- * penalized for data Qloo did not return.
+ * dropped and the remaining weights renormalized.
  */
-export function sponsorFit(parts: { affinity: number; tags: number; demographics?: number }): number {
-  const comps: Array<[number, number]> = [
-    [FIT_WEIGHTS.affinity, clamp01(parts.affinity)],
-    [FIT_WEIGHTS.tags, clamp01(parts.tags)],
-  ];
+export function sponsorFit(parts: { affinity: number; tags?: number; demographics?: number }): number {
+  const comps: Array<[number, number]> = [[FIT_WEIGHTS.affinity, clamp01(parts.affinity)]];
+  if (parts.tags !== undefined) comps.push([FIT_WEIGHTS.tags, clamp01(parts.tags)]);
   if (parts.demographics !== undefined) comps.push([FIT_WEIGHTS.demographics, clamp01((parts.demographics + 1) / 2)]);
   const totalWeight = comps.reduce((s, [w]) => s + w, 0);
   const score = comps.reduce((s, [w, v]) => s + w * v, 0) / totalWeight;
@@ -149,32 +85,46 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
 }
 
-export function contributorsFor(entity: QlooEntity, performers: ResolvedEntity[], venue?: ResolvedEntity): Contributor[] {
-  const scores = entityExplainability(entity);
+export function contributorsFor(entity: QlooResultEntity, performers: ResolvedEntity[], venue?: ResolvedEntity): Contributor[] {
   const known = new Map<string, { name: string; kind: Contributor["kind"] }>(
     performers.map((p) => [p.id, { name: p.name, kind: "performer" }] as const),
   );
   if (venue) known.set(venue.id, { name: venue.name, kind: "venue" });
-  return [...scores.entries()]
+  return [...explainabilityScores(entity).entries()]
     .map(([id, score]) => ({ id, name: known.get(id)?.name ?? id, kind: known.get(id)?.kind ?? "other", score: round(score, 3) }))
     .sort((a, b) => b.score - a.score);
 }
 
-export function toLocalPlaces(entities: QlooEntity[], limit = 3): LocalPlace[] {
-  return entities.slice(0, limit).map((e) => ({
-    id: e.entity_id,
-    name: e.name,
-    address: entityAddress(e),
-    affinity: entityAffinity(e) !== undefined ? round(entityAffinity(e)!, 3) : undefined,
-  }));
+/** qloo_where_popular results (heatmap points) -> hotspots, strongest first. */
+export function toHotspots(points: unknown[], limit = 3): Hotspot[] {
+  const out: Hotspot[] = [];
+  for (const p of points) {
+    const loc = (p as { location?: Record<string, unknown> })?.location;
+    const q = (p as { query?: Record<string, unknown> })?.query;
+    const lat = loc?.latitude;
+    const lon = loc?.longitude;
+    if (typeof lat !== "number" || typeof lon !== "number") continue;
+    out.push({
+      latitude: lat,
+      longitude: lon,
+      geohash: typeof loc?.geohash === "string" ? loc.geohash : undefined,
+      affinity: typeof q?.affinity === "number" ? round(q.affinity, 3) : undefined,
+      popularity: typeof q?.popularity === "number" ? round(q.popularity, 3) : undefined,
+    });
+  }
+  return out.sort((a, b) => (b.affinity ?? 0) - (a.affinity ?? 0)).slice(0, limit);
 }
 
 export interface BuildEvidenceInput {
-  brands: QlooEntity[];
+  brands: QlooResultEntity[];
   audienceTags: AudienceTag[];
   audienceDemographics?: DemographicProfile;
   brandDemographics?: Map<string, DemographicProfile>;
-  localPresence?: Map<string, LocalPlace[]>;
+  brandTags?: Map<string, AudienceTag[]>;
+  hotspots?: Map<string, Hotspot[]>;
+  sources?: Map<string, BrandEvidence["source"]>;
+  /** Raw Qloo order (recommend order) used for the "Qloo #n" label. */
+  qlooOrder?: string[];
   performers: ResolvedEntity[];
   venue?: ResolvedEntity;
 }
@@ -183,47 +133,42 @@ export interface BuildEvidenceInput {
 export function buildBrandEvidence(input: BuildEvidenceInput): BrandEvidence[] {
   const seen = new Set<string>();
   const cards: BrandEvidence[] = [];
-  input.brands.forEach((entity, index) => {
-    if (!entity?.entity_id || seen.has(entity.entity_id)) return;
+  const order = input.qlooOrder ?? input.brands.map((b) => b.entity_id);
+  for (const entity of input.brands) {
+    if (!entity?.entity_id || seen.has(entity.entity_id)) continue;
     seen.add(entity.entity_id);
-    const affinity = entityAffinity(entity);
-    if (affinity === undefined) return;
-    const brandTags = (entity.tags ?? []).filter((t) => t?.id).map((t) => ({ id: t.id, name: t.name }));
+    const affinity = typeof entity.affinity === "number" && Number.isFinite(entity.affinity) ? entity.affinity : undefined;
+    if (affinity === undefined) continue;
+    const tags = input.brandTags?.get(entity.entity_id);
+    const brandTags = (tags ?? []).map((t) => ({ id: t.id, name: t.name, affinity: t.affinity }));
     const { overlapping, score } = tagOverlap(brandTags, input.audienceTags);
     const demographics = input.brandDemographics?.get(entity.entity_id);
     const alignment = demographicAlignment(input.audienceDemographics, demographics);
-    const useOccasions = entityProperty(entity, "use_occasions") ?? [];
-    const fitBreakdown = { affinity: round(affinity, 3), tags: score, demographics: alignment };
+    const fitBreakdown = { affinity: round(affinity, 3), tags: tags ? score : undefined, demographics: alignment };
+    const qlooIndex = order.indexOf(entity.entity_id);
     cards.push({
       rank: 0,
       id: entity.entity_id,
       name: entity.name,
       description: entityDescription(entity),
       image: entityImage(entity),
-      qlooRank: index + 1,
+      qlooRank: qlooIndex === -1 ? order.length + cards.length + 1 : qlooIndex + 1,
       qlooAffinity: round(affinity, 3),
-      popularity: entity.popularity !== undefined ? round(entity.popularity, 3) : undefined,
+      popularity: typeof entity.popularity === "number" ? round(entity.popularity, 3) : undefined,
       overlappingTags: overlapping,
       brandTags,
+      brandTagsChecked: tags !== undefined,
       tagOverlapScore: score,
       contributors: contributorsFor(entity, input.performers, input.venue),
       demographics,
       demographicAlignment: alignment,
-      localPresence: input.localPresence?.get(entity.entity_id) ?? [],
-      localPresenceChecked: input.localPresence?.has(entity.entity_id) ?? false,
-      metadata: {
-        useOccasions,
-        targetAudience: entityProperty(entity, "target_audience") ?? [],
-        psychographics: entityProperty(entity, "psychographic_segments") ?? [],
-        personality: entityProperty(entity, "brand_personality") ?? [],
-        industries: entityProperty(entity, "industry_categories") ?? [],
-        priceTier: entityProperty(entity, "price_tier") ?? [],
-      },
-      eventOccasions: useOccasions.filter((o) => EVENT_OCCASION_PATTERN.test(o)),
+      hotspots: input.hotspots?.get(entity.entity_id) ?? [],
+      hotspotsChecked: input.hotspots?.has(entity.entity_id) ?? false,
+      source: input.sources?.get(entity.entity_id) ?? "recommended",
       sponsorFit: sponsorFit(fitBreakdown),
-      fitBreakdown,
+      fitBreakdown: { affinity: fitBreakdown.affinity, tags: score, demographics: alignment },
     });
-  });
+  }
   cards.sort((a, b) => b.sponsorFit - a.sponsorFit || b.qlooAffinity - a.qlooAffinity || a.qlooRank - b.qlooRank);
   cards.forEach((c, i) => (c.rank = i + 1));
   return cards;

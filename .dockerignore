@@ -1,0 +1,10 @@
+.git
+.next
+node_modules
+.env
+.env.*
+!.env.example
+RESOURCES.md
+coverage
+*.log
+.vercel

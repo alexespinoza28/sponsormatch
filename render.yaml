@@ -1,0 +1,24 @@
+# Render Blueprint for SponsorMatch (https://render.com/docs/blueprint-spec).
+# Runs the Docker image as a long-running web service; the app spawns the
+# local `qloo mcp` harness, which serverless platforms do not support.
+services:
+  - type: web
+    name: sponsormatch
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    autoDeploy: false
+    healthCheckPath: /api/health
+    envVars:
+      # Secrets: Render asks for these values when the Blueprint is created.
+      - key: QLOO_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      # Not secret.
+      - key: NVIDIA_MODEL
+        value: nvidia/nemotron-3.5-lightning-30b-a3b
+      - key: QLOO_BASE_URL
+        value: https://hackathon.api.qloo.com
+      - key: QLOO_TRUSTED_BASE_URL
+        value: https://hackathon.api.qloo.com

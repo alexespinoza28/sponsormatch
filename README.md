@@ -58,7 +58,7 @@ Set these in `.env` locally or in the Vercel project settings. They are read onl
 | --- | --- | --- |
 | `QLOO_API_KEY` | For live data | Qloo hackathon key. Sent as the `X-Api-Key` header to `https://hackathon.api.qloo.com`. |
 | `NVIDIA_API_KEY` | For model pitches | NVIDIA API key for `https://integrate.api.nvidia.com/v1/chat/completions`. |
-| `NVIDIA_MODEL` | No | Overrides the default model, `nvidia/nemotron-3-super-120b-a12b`. |
+| `NVIDIA_MODEL` | No | Overrides the default model, `nvidia/nemotron-3.5-lightning-30b-a3b`. |
 
 ## Tests and checks
 

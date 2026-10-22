@@ -2,7 +2,7 @@
 // Server-only: NVIDIA_API_KEY is read from the environment by the caller.
 
 export const NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
-export const DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3-super-120b-a12b";
+export const DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -36,8 +36,9 @@ export function buildChatBody(model: string, messages: ChatMessage[], maxTokens 
   return {
     model,
     messages,
-    temperature: 1.0,
-    top_p: 0.95,
+    // Low-ish temperature: pitches must stay close to the given evidence.
+    temperature: 0.5,
+    top_p: 0.9,
     max_tokens: maxTokens,
     stream: false,
     chat_template_kwargs: { enable_thinking: false },

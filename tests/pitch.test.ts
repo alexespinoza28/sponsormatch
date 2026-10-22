@@ -51,8 +51,8 @@ describe("nemotron client", () => {
   it("builds the request body with reasoning off and the requested sampling", () => {
     expect(buildChatBody("m", [{ role: "user", content: "hi" }])).toMatchObject({
       model: "m",
-      temperature: 1.0,
-      top_p: 0.95,
+      temperature: 0.5,
+      top_p: 0.9,
       stream: false,
       chat_template_kwargs: { enable_thinking: false },
     });
@@ -60,7 +60,7 @@ describe("nemotron client", () => {
 
   it("resolves the model from NVIDIA_MODEL with a default", () => {
     expect(resolveModel({})).toBe(DEFAULT_NVIDIA_MODEL);
-    expect(DEFAULT_NVIDIA_MODEL).toBe("nvidia/nemotron-3-super-120b-a12b");
+    expect(DEFAULT_NVIDIA_MODEL).toBe("nvidia/nemotron-3.5-lightning-30b-a3b");
     expect(resolveModel({ NVIDIA_MODEL: " other/model " })).toBe("other/model");
   });
 

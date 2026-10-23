@@ -1,4 +1,4 @@
-import { interpretedEntity, issueCandidates, resolutionIssues, resultEntities, resultTags } from "@/lib/qloo/normalize";
+import { entityAddress, interpretedEntity, issueCandidates, resolutionIssues, resultEntities, resultTags } from "@/lib/qloo/normalize";
 import type { InsightsEntityType, QlooCandidate, QlooTools, SearchEntityType } from "@/lib/qloo/types";
 import { classify } from "./budget";
 import { parseTrends, rankAffinities, tasteOverlap } from "./parse";
@@ -67,13 +67,14 @@ export async function describeEntity(
   return undefined;
 }
 
+// With a hint (a venue's city), only a candidate whose address or description
+// mentions it is taken: live, "The Troubadour" offered a bar in Jersey and two
+// Dutch shops, none of them the LA club, so falling back to the first
+// candidate would have ranked the wrong place.
 function pickCandidate(candidates: QlooCandidate[], hint?: string): QlooCandidate | undefined {
-  if (hint) {
-    const h = hint.toLowerCase();
-    const hit = candidates.find((c) => JSON.stringify(c.address ?? c.description ?? "").toLowerCase().includes(h));
-    if (hit) return hit;
-  }
-  return candidates[0];
+  if (!hint) return candidates[0];
+  const h = hint.toLowerCase();
+  return candidates.find((c) => JSON.stringify([c.address ?? "", c.description ?? ""]).toLowerCase().includes(h));
 }
 
 export interface RankedOption {
@@ -133,12 +134,18 @@ export async function rankOptions(
         const { byId, inputs: interp } = rankAffinities(env);
         result = new Map();
         const names = new Map(resultEntities(env).map((e) => [e.entity_id, e.name]));
+        const addresses = new Map(resultEntities(env).flatMap((e) => { const a = entityAddress(e); return a ? [[e.entity_id, a] as const] : []; }));
         for (const [text, original] of sent) {
           const hit = interp.get(text);
           const id = hit?.id ?? (byId.has(text) ? text : resultEntities(env).find((e) => e.name.toLowerCase() === text.toLowerCase())?.entity_id);
           if (!id || !byId.has(id)) continue;
           const match = args.pins[original] ? "confirmed" : (out.get(original)?.match ?? hit?.match ?? "resolved");
           result.set(original, { input: original, id, name: hit?.name ?? names.get(id) ?? original, affinity: byId.get(id)!, match });
+          const hint = args.hints?.[original];
+          const address = addresses.get(id);
+          if (hint && address && !address.toLowerCase().includes(hint.toLowerCase())) {
+            notes.notes.push(`"${original}" resolved to ${hit?.name ?? names.get(id) ?? original} at ${address}, which doesn't mention ${hint}; check it's the right place.`);
+          }
         }
         break;
       }
@@ -157,6 +164,8 @@ export async function rankOptions(
           sent.set(top.id, original);
           out.set(original, { input: original, id: top.id, name: top.name, affinity: 0, match: "agent_pick" });
           notes.notes.push(`"${original}" is ${issue.kind} in Qloo; continuing with ${top.name}. Pick another to re-run.`);
+        } else if (args.hints?.[original] && candidates.length) {
+          notes.notes.push(`"${original}": none of Qloo's ${candidates.length} places with that name is in ${args.hints[original]}; left out. Try a more specific name (e.g. add the neighborhood) or pick one.`);
         } else {
           notes.notes.push(`"${original}" was not found in Qloo; left out.`);
         }

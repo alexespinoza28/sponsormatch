@@ -1,12 +1,12 @@
 import { resultEntities } from "@/lib/qloo/normalize";
 import type { QlooEnvelope } from "@/lib/qloo/types";
 import { momentumFromPoints, round } from "./scoring";
-import type { CompareRow, HeadToHead, Momentum } from "./types";
+import type { Momentum, TasteOverlap, TasteTag } from "./types";
 
-// Readers for the two harness tools whose result layout is passed through
-// from Qloo and not fixed by the harness: qloo_compare_audiences (raw
-// /v2/analysis/compare `results`) and qloo_trends (`series[].points[]`, raw
-// /v2/trending rows). Both readers are defensive and say when they cannot
+// Readers for the two harness tools whose result layout the harness passes
+// through from Qloo: qloo_compare_audiences (raw /v2/analysis/compare
+// `results`) and qloo_trends (`series[].points[]`, raw /v2/trending rows).
+// Layouts as seen in the Oct 22 live probe; both readers say when they cannot
 // read a layout instead of guessing numbers.
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -15,72 +15,51 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function num(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (isRecord(v) && typeof v.affinity === "number" && Number.isFinite(v.affinity)) return v.affinity;
+  if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
   return undefined;
 }
 
-function first(rec: Record<string, unknown>, paths: string[][]): number | undefined {
-  for (const path of paths) {
-    let cur: unknown = rec;
-    for (const key of path) cur = isRecord(cur) ? cur[key] : undefined;
-    const n = num(cur);
-    if (n !== undefined) return n;
+function tagRows(rows: unknown, field: "score" | "count"): TasteTag[] {
+  if (!Array.isArray(rows)) return [];
+  const out: TasteTag[] = [];
+  for (const r of rows) {
+    if (!isRecord(r)) continue;
+    const id = [r.tag_id, r.id, r.entity_id].find((v): v is string => typeof v === "string");
+    if (!id || typeof r.name !== "string") continue;
+    const v = num(isRecord(r.query) ? r.query[field] : undefined) ?? num(r[field]);
+    out.push({ id, name: r.name, ...(v !== undefined ? { [field]: field === "score" ? round(v) : v } : {}) });
   }
-  return undefined;
-}
-
-const A_PATHS = [["query", "a"], ["a"], ["group_a"], ["query", "group_a"], ["affinity_a"], ["query", "affinity_a"], ["query", "affinity", "a"]];
-const B_PATHS = [["query", "b"], ["b"], ["group_b"], ["query", "group_b"], ["affinity_b"], ["query", "affinity_b"], ["query", "affinity", "b"]];
-const DELTA_PATHS = [["query", "delta"], ["delta"], ["query", "affinity_delta"], ["affinity_delta"], ["query", "difference"], ["difference"]];
-
-/** The rows of a compare result: an array, or the first array inside a results object. */
-function compareRows(results: unknown): unknown[] {
-  if (Array.isArray(results)) return results;
-  if (!isRecord(results)) return [];
-  for (const key of ["entities", "tags", "results", "comparison", "items"]) if (Array.isArray(results[key])) return results[key] as unknown[];
-  for (const v of Object.values(results)) if (Array.isArray(v)) return v;
-  return [];
-}
-
-export function parseCompareRows(results: unknown): CompareRow[] {
-  const rows: CompareRow[] = [];
-  for (const raw of compareRows(results)) {
-    if (!isRecord(raw)) continue;
-    const id = [raw.entity_id, raw.tag_id, raw.id].find((v): v is string => typeof v === "string");
-    const name = typeof raw.name === "string" ? raw.name : undefined;
-    if (!id || !name) continue;
-    const a = first(raw, A_PATHS);
-    const b = first(raw, B_PATHS);
-    // With both sides present, compute b - a ourselves; a delta-only layout is
-    // read as b - a (sign convention to confirm against the live API).
-    const delta = a !== undefined && b !== undefined ? round(b - a) : first(raw, DELTA_PATHS);
-    rows.push({ id, name, ...(a !== undefined ? { a: round(a) } : {}), ...(b !== undefined ? { b: round(b) } : {}), ...(delta !== undefined ? { delta: round(delta) } : {}) });
-  }
-  return rows;
+  return out;
 }
 
 /**
- * Turns a qloo_compare_audiences envelope (group A = current, group B =
- * proposed) into head-to-head evidence for the target brands.
+ * qloo_compare_audiences (group A vs. group B) -> taste overlap.
+ * Live layout: results = {tags: [{tag_id, name, query: {score}}], a: [...],
+ * b: [...] (query.count), matchEntities: []}. target_type "brand" does not
+ * add brand rows, so this is taste evidence, not brand fit.
  */
-export function headToHead(env: QlooEnvelope | undefined, targetIds: string[]): HeadToHead {
+export function tasteOverlap(env: QlooEnvelope | undefined): TasteOverlap {
+  const empty = { shared: [], onlyA: [], onlyB: [] };
   if (!env || (env.status !== "ok" && env.status !== "partial" && env.status !== "degraded")) {
-    return { layout: "unavailable", rows: [], targetsFound: [], topGainers: [], note: env ? `compare_audiences ${env.status}${env.summary ? `: ${env.summary}` : ""}` : "not run" };
+    return { layout: "unavailable", ...empty, note: env ? `compare_audiences ${env.status}${env.summary ? `: ${env.summary}` : ""}` : "not run" };
   }
-  const rows = parseCompareRows(env.results);
-  const withDelta = rows.filter((r) => r.delta !== undefined);
-  if (!withDelta.length) {
-    const keys = isRecord(env.results) ? Object.keys(env.results).join(", ") : Array.isArray(env.results) ? `array of ${env.results.length}` : typeof env.results;
-    return { layout: "unrecognized", rows, targetsFound: [], topGainers: [], note: `compare_audiences answered, but its layout was not recognized (results: ${keys}).`, evidenceId: env.execution?.correlation_id };
+  const res = env.results;
+  const shared = isRecord(res) ? tagRows(res.tags, "score").filter((t) => t.score !== undefined) : [];
+  if (!isRecord(res) || !shared.length) {
+    const keys = isRecord(res) ? Object.keys(res).join(", ") : Array.isArray(res) ? `array of ${res.length}` : typeof res;
+    return { layout: "unrecognized", ...empty, note: `compare_audiences answered, but its layout was not recognized (results: ${keys}).`, evidenceId: env.execution?.correlation_id };
   }
-  const targets = withDelta.filter((r) => targetIds.includes(r.id));
-  const targetLean = targets.length ? round(targets.reduce((s, r) => s + r.delta!, 0) / targets.length) : undefined;
+  const a = tagRows(res.a, "count");
+  const b = tagRows(res.b, "count");
+  const sharedIds = new Set(shared.map((t) => t.id));
+  const aIds = new Set(a.map((t) => t.id));
+  const bIds = new Set(b.map((t) => t.id));
   return {
     layout: "parsed",
-    rows: withDelta,
-    targetLean,
-    targetsFound: targets.map((t) => t.id),
-    topGainers: [...withDelta].sort((x, y) => y.delta! - x.delta!).filter((r) => r.delta! > 0).slice(0, 3),
+    shared: [...shared].sort((x, y) => y.score! - x.score!),
+    onlyA: a.filter((t) => !sharedIds.has(t.id) && !bIds.has(t.id)),
+    onlyB: b.filter((t) => !sharedIds.has(t.id) && !aIds.has(t.id)),
+    meanScore: round(shared.reduce((s, t) => s + t.score!, 0) / shared.length),
     evidenceId: env.execution?.correlation_id,
   };
 }

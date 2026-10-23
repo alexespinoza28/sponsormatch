@@ -1,0 +1,177 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "compare_audiences",
+  "status": "ok",
+  "interpretation": {
+    "group_a": [
+      {
+        "input": "0A1B2C3D-0000-4000-A000-000000000001",
+        "entityId": "0A1B2C3D-0000-4000-A000-000000000001",
+        "name": "The Fixture Tones",
+        "match": "identifier"
+      }
+    ],
+    "group_b": [
+      {
+        "input": "0A1B2C3D-0000-4000-A000-000000000002",
+        "entityId": "0A1B2C3D-0000-4000-A000-000000000002",
+        "name": "Fixture Revival",
+        "match": "identifier"
+      }
+    ],
+    "target_type": "urn:entity:brand"
+  },
+  "results": {
+    "tags": [
+      {
+        "tag_id": "urn:tag:genre:qloo:dream_pop",
+        "name": "Dream Pop",
+        "type": "urn:tag",
+        "subtype": "urn:tag:genre:qloo",
+        "entity_id": "urn:tag:genre:qloo:dream_pop",
+        "popularity": 0.5,
+        "query": {
+          "score": 0.98,
+          "a.signal.interests.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000001"
+          ],
+          "b.signal.interests.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000002"
+          ]
+        }
+      },
+      {
+        "tag_id": "urn:tag:genre:qloo:indie_folk",
+        "name": "Indie Folk",
+        "type": "urn:tag",
+        "subtype": "urn:tag:genre:qloo",
+        "entity_id": "urn:tag:genre:qloo:indie_folk",
+        "popularity": 0.5,
+        "query": {
+          "score": 0.91,
+          "a.signal.interests.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000001"
+          ],
+          "b.signal.interests.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000002"
+          ]
+        }
+      },
+      {
+        "tag_id": "urn:tag:genre:qloo:bedroom_pop",
+        "name": "Bedroom Pop",
+        "type": "urn:tag",
+        "subtype": "urn:tag:genre:qloo",
+        "entity_id": "urn:tag:genre:qloo:bedroom_pop",
+        "popularity": 0.5,
+        "query": {
+          "score": 0.87,
+          "a.signal.interests.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000001"
+          ],
+          "b.signal.interests.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000002"
+          ]
+        }
+      }
+    ],
+    "a": [
+      {
+        "tag_id": "urn:tag:genre:qloo:dream_pop",
+        "name": "Dream Pop",
+        "type": "urn:tag",
+        "subtype": "urn:tag:genre:qloo",
+        "entity_id": "urn:tag:genre:qloo:dream_pop",
+        "popularity": 0.4,
+        "query": {
+          "count": 31
+        }
+      },
+      {
+        "tag_id": "urn:tag:genre:qloo:shoegaze",
+        "name": "Shoegaze",
+        "type": "urn:tag",
+        "subtype": "urn:tag:genre:qloo",
+        "entity_id": "urn:tag:genre:qloo:shoegaze",
+        "popularity": 0.4,
+        "query": {
+          "count": 18
+        }
+      },
+      {
+        "tag_id": "urn:tag:genre:qloo:indie_folk",
+        "name": "Indie Folk",
+        "type": "urn:tag",
+        "subtype": "urn:tag:genre:qloo",
+        "entity_id": "urn:tag:genre:qloo:indie_folk",
+        "popularity": 0.4,
+        "query": {
+          "count": 12
+        }
+      }
+    ],
+    "b": [
+      {
+        "tag_id": "urn:tag:genre:qloo:dream_pop",
+        "name": "Dream Pop",
+        "type": "urn:tag",
+        "subtype": "urn:tag:genre:qloo",
+        "entity_id": "urn:tag:genre:qloo:dream_pop",
+        "popularity": 0.4,
+        "query": {
+          "count": 27
+        }
+      },
+      {
+        "tag_id": "urn:tag:genre:qloo:art_pop",
+        "name": "Art Pop",
+        "type": "urn:tag",
+        "subtype": "urn:tag:genre:qloo",
+        "entity_id": "urn:tag:genre:qloo:art_pop",
+        "popularity": 0.4,
+        "query": {
+          "count": 22
+        }
+      },
+      {
+        "tag_id": "urn:tag:genre:qloo:bedroom_pop",
+        "name": "Bedroom Pop",
+        "type": "urn:tag",
+        "subtype": "urn:tag:genre:qloo",
+        "entity_id": "urn:tag:genre:qloo:bedroom_pop",
+        "popularity": 0.4,
+        "query": {
+          "count": 15
+        }
+      }
+    ],
+    "matchEntities": []
+  },
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-cmp",
+    "duration_ms": 12
+  },
+  "provenance": {
+    "source": "Qloo API",
+    "endpoint": "/v2/analysis/compare",
+    "documentation": "https://docs.qloo.com/reference/analysis-compare",
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/v2/analysis/compare",
+        "query": {
+          "a.signal.interests.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000001"
+          ],
+          "b.signal.interests.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000002"
+          ],
+          "filter.type": "urn:entity:brand",
+          "take": 20
+        }
+      }
+    ]
+  }
+}

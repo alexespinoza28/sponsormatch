@@ -1,7 +1,7 @@
 import { explainabilityScores, resultEntities } from "@/lib/qloo/normalize";
 import type { QlooToolCallRecord } from "@/lib/qloo/types";
 import { BudgetedQloo, CallLog, classify, QlooAuthError } from "./budget";
-import { compareGroups, describeEntity, entityTags, momentum, Notes, rankOptions, trendWindow } from "./qloo-steps";
+import { compareTastes, describeEntity, entityTags, momentum, Notes, rankOptions, trendWindow } from "./qloo-steps";
 import { applyMove, describeMove, heuristicPropose, MAX_CONSECUTIVE_REJECTS, nemotronPropose, type Proposal, type ProposalContext } from "./proposer";
 import { lineupKey, pctChange, round, scoreLineup, tagOverlap } from "./scoring";
 import type {
@@ -9,10 +9,12 @@ import type {
   BudgetState,
   BrandScore,
   Choice,
-  HeadToHead,
+  ComparableCheck,
+  TasteOverlap,
   IterationEvent,
   Lineup,
   LineupScore,
+  Move,
   NextSponsor,
   OptimizeInput,
   OptimizeResult,
@@ -24,19 +26,23 @@ import type {
 
 // The lineup optimizer's agent loop.
 //
-//   setup:    resolve brands, acts and venues once (IDs from then on), then
-//             per-act taste tags and momentum, then score the draft lineup.
+//   setup:    resolve brands, acts and venues once (IDs from then on); one
+//             qloo_rank call scores all acts, one all venues, against the
+//             brands on a shared scale; then per-act taste tags and momentum;
+//             then score the draft lineup.
 //   loop:     propose one move (Nemotron or heuristic) -> score the new
 //             lineup with qloo_rank -> if it beats the current one, confirm
-//             head-to-head with qloo_compare_audiences -> accept or reject.
+//             the fit gain on the shared setup scale -> accept or reject;
+//             for accepted moves, qloo_compare_audiences shows how the
+//             audience's tastes change.
 //   stop:     the proposer stops, the budget runs out, no legal moves remain,
 //             too many rejections in a row, or the iteration cap.
 //   final:    qloo_recommend for further sponsors (with explainability) and a
-//             draft-vs-final head-to-head.
+//             draft-vs-final taste comparison.
 //
 // Invariant: a move is accepted only with an ok qloo_rank result for the new
-// lineup that beats the current objective, and never against a parsed
-// head-to-head that contradicts it.
+// lineup that beats the current objective, and never when the comparable
+// (single-call) Qloo scores contradict its fit gain.
 
 export class OptimizerError extends Error {
   constructor(message: string) {
@@ -167,8 +173,10 @@ export async function runOptimizer(input: OptimizeInput, deps: OptimizerDeps): P
     const trends = await momentum(qloo, notes, acts.map((a) => a.entity.id), "artist", window);
     for (const a of acts) a.momentum = trends.get(a.entity.id);
     const rising = acts.filter((a) => a.momentum).sort((x, y) => y.momentum!.value - x.momentum!.value);
-    if (rising.length) notes.notes.push(`Momentum ${window.start} to ${window.end}: ${rising.map((a) => `${a.entity.name} ${a.momentum!.value >= 0 ? "+" : ""}${Math.round(a.momentum!.value * 100)}%`).join(", ")}.`);
-    else notes.notes.push("No usable trend series; momentum is left out of the objective.");
+    const noData = acts.filter((a) => !a.momentum);
+    if (rising.length) notes.notes.push(`Momentum ${window.start} to ${window.end} (Qloo trend data lags, so the window ends months back): ${rising.map((a) => `${a.entity.name} ${a.momentum!.value >= 0 ? "+" : ""}${Math.round(a.momentum!.value * 100)}%`).join(", ")}.`);
+    if (noData.length && rising.length) notes.notes.push(`No recent trend data for ${noData.map((a) => a.entity.name).join(", ")}; counted as flat so it neither helps nor blocks a move.`);
+    if (!rising.length) notes.notes.push("No recent trend data for any act; momentum is left out of the objective.");
     setupDone("profile", title, `${acts.filter((a) => a.tags.length).length} tag profiles, ${trends.size} trend series.`, notes);
 
     // 3. BASELINE --------------------------------------------------------------
@@ -224,7 +232,7 @@ export async function runOptimizer(input: OptimizeInput, deps: OptimizerDeps): P
     const history: OptimizeResult["history"] = [{ iteration: 0, objective: draft.objective, accepted: true, best: draft.objective }];
     const ctxHistory: ProposalContext["history"] = [];
     const accepted: OptimizeResult["acceptedMoves"] = [];
-    const headToHeads = new Map<string, HeadToHead>();
+    const tasteShifts = new Map<string, TasteOverlap>();
     let consecutiveRejects = 0;
     let stopReason = `Reached the ${maxIterations}-iteration cap.`;
     const actName = (id: string) => acts.find((a) => a.entity.id === id)?.entity.name ?? id;
@@ -269,31 +277,31 @@ export async function runOptimizer(input: OptimizeInput, deps: OptimizerDeps): P
 
       let ok = false;
       let reason: string;
-      let h2h: HeadToHead | undefined;
+      let comparable: ComparableCheck | undefined;
+      let tastes: TasteOverlap | undefined;
       if (!ev.score) {
         reason = `Rejected: no Qloo evidence for the new lineup (${ev.reason}).`;
       } else if (ev.score.objective < current.objective + minGain) {
         reason = `Rejected: Qloo scores it ${ev.score.objective} vs. current ${current.objective}.`;
-      } else if (qloo.remaining >= 1 + FINAL_RESERVE) {
-        h2h = await compareGroups(qloo, n, group(current), group(ev.score), brandIds, "brand");
-        headToHeads.set(`${current.key}>${ev.score.key}`, h2h);
-        if (h2h.layout === "parsed" && h2h.targetLean !== undefined && h2h.targetLean < -0.01) {
-          reason = `Rejected: qloo_rank says ${ev.score.objective} vs. ${current.objective}, but the head-to-head compare_audiences shows the target brands leaning to the current lineup (${h2h.targetLean.toFixed(3)}).`;
+      } else {
+        // Per-lineup qloo_rank scores come from separate calls, which Qloo
+        // says are not directly comparable. Confirm a fit gain against the
+        // one setup call that scored every act (or venue) on one scale.
+        comparable = comparableCheck(move, current, ev.score, acts, slots);
+        if (comparable.contradicts) {
+          reason = `Rejected: per-lineup qloo_rank says ${ev.score.objective} vs. ${current.objective}, but ${comparable.note}`;
         } else {
           ok = true;
-          reason =
-            h2h.layout === "parsed"
-              ? h2h.targetLean !== undefined
-                ? `Accepted: objective ${current.objective} -> ${ev.score.objective}; head-to-head confirms (target lean ${h2h.targetLean >= 0 ? "+" : ""}${h2h.targetLean.toFixed(3)}).`
-                : `Accepted: objective ${current.objective} -> ${ev.score.objective}; target brands not in the head-to-head rows, so qloo_rank decides.`
-              : `Accepted: objective ${current.objective} -> ${ev.score.objective} (head-to-head ${h2h.layout}: ${h2h.note ?? ""}).`;
+          reason = `Accepted: objective ${current.objective} -> ${ev.score.objective}; ${comparable.note}`;
+          // Taste evidence for the trace: how the audience changes (one compare_audiences call).
+          if (qloo.remaining >= 1 + FINAL_RESERVE) {
+            tastes = await compareTastes(qloo, n, group(current), group(ev.score));
+            tasteShifts.set(`${current.key}>${ev.score.key}`, tastes);
+          }
         }
-      } else {
-        ok = true;
-        reason = `Accepted: objective ${current.objective} -> ${ev.score.objective} (head-to-head skipped to stay within budget).`;
       }
 
-      const explanation = ok && ev.score ? explainMove(moveText, current, ev.score, h2h, brands[0]!.name) : undefined;
+      const explanation = ok && ev.score ? explainMove(moveText, current, ev.score, tastes, brands[0]!.name) : undefined;
       ctxHistory.push({ iteration, moveText, accepted: ok, before: current.objective, after: ev.score?.objective, reason });
       if (ok && ev.score) {
         current = ev.score;
@@ -304,7 +312,7 @@ export async function runOptimizer(input: OptimizeInput, deps: OptimizerDeps): P
       }
       history.push({ iteration, objective: ev.score?.objective ?? current.objective, accepted: ok, best: current.objective });
       if (n.warnings.length) reason += ` Warnings: ${n.warnings.join("; ")}`;
-      emit({ ...base, phase: "decision", candidate: ev.score, headToHead: h2h, accepted: ok, reason, explanation, calls: log.drain(), budget: budget() });
+      emit({ ...base, phase: "decision", candidate: ev.score, comparable, tasteOverlap: tastes, accepted: ok, reason, explanation, calls: log.drain(), budget: budget() });
       if (iteration === maxIterations) stopReason = `Reached the ${maxIterations}-iteration cap.`;
     }
     emit({ type: "stop", reason: stopReason, budget: budget() });
@@ -336,10 +344,10 @@ export async function runOptimizer(input: OptimizeInput, deps: OptimizerDeps): P
           }));
       }
     }
-    let finalHeadToHead: HeadToHead | undefined;
+    let finalTasteShift: TasteOverlap | undefined;
     if (best.key !== draft.key) {
-      finalHeadToHead = headToHeads.get(`${draft.key}>${best.key}`);
-      if (!finalHeadToHead && qloo.remaining >= 1) finalHeadToHead = await compareGroups(qloo, fn, group(draft), group(best), brandIds, "brand");
+      finalTasteShift = tasteShifts.get(`${draft.key}>${best.key}`);
+      if (!finalTasteShift && qloo.remaining >= 1) finalTasteShift = await compareTastes(qloo, fn, group(draft), group(best));
     }
     const members = best.lineup.acts.map((id) => acts.find((a) => a.entity.id === id)!).filter(Boolean);
     const cohesionPairs: OptimizeResult["cohesionPairs"] = [];
@@ -360,7 +368,7 @@ export async function runOptimizer(input: OptimizeInput, deps: OptimizerDeps): P
       best,
       history,
       acceptedMoves: accepted,
-      finalHeadToHead,
+      finalTasteShift,
       nextSponsors,
       cohesionPairs,
       stopReason,
@@ -383,8 +391,52 @@ export async function runOptimizer(input: OptimizeInput, deps: OptimizerDeps): P
   }
 }
 
+/**
+ * Confirms a move's fit gain on one comparable Qloo scale: the setup qloo_rank
+ * call that scored all candidate acts (option_type artist) or all venues
+ * (option_type place) against the target brands together. A move whose
+ * per-lineup fit rose is rejected if, in that one call, the incoming act or
+ * venue scored clearly below the one it replaces. Moves that win on cohesion
+ * or momentum alone (fit not up) need no fit confirmation.
+ */
+export const COMPARABLE_TOLERANCE = 0.02;
+
+export function comparableCheck(move: Move, before: LineupScore, after: LineupScore, acts: ActProfile[], slots: SlotProfile[]): ComparableCheck {
+  const fitUp = after.parts.fit > before.parts.fit;
+  let outName: string | undefined;
+  let inName: string | undefined;
+  let outAffinity: number | undefined;
+  let inAffinity: number | undefined;
+  let kind: ComparableCheck["kind"];
+  if (move.kind === "swap") {
+    const o = acts.find((a) => a.entity.id === move.out);
+    const i = acts.find((a) => a.entity.id === move.in);
+    kind = "acts";
+    outName = o?.entity.name;
+    inName = i?.entity.name;
+    outAffinity = o?.brandAffinity;
+    inAffinity = i?.brandAffinity;
+  } else {
+    const o = slots[before.lineup.slot];
+    const i = slots[move.to];
+    kind = "venues";
+    outName = o?.entity?.name ?? o?.input.venue;
+    inName = i?.entity?.name ?? i?.input.venue;
+    outAffinity = o?.brandAffinity;
+    inAffinity = i?.brandAffinity;
+  }
+  if (outAffinity === undefined || inAffinity === undefined) {
+    return { kind: "none", outName, inName, contradicts: false, note: `no comparable ${kind === "acts" ? "act" : "venue"} scores, so the per-lineup qloo_rank decides.` };
+  }
+  const base = { kind, outName, inName, outAffinity, inAffinity };
+  const scale = `in one qloo_rank call ${inName} scores ${inAffinity.toFixed(2)} vs. ${outName} ${outAffinity.toFixed(2)} for these brands`;
+  if (!fitUp) return { ...base, contradicts: false, note: `the gain comes from cohesion/momentum, not fit (${scale}).` };
+  if (inAffinity < outAffinity - COMPARABLE_TOLERANCE) return { ...base, contradicts: true, note: `${scale}, so the fit gain is not confirmed.` };
+  return { ...base, contradicts: false, note: `comparable check agrees (${scale}).` };
+}
+
 /** "Swap X for Y: fit with Z rises 18% (0.62 -> 0.73) ..." from Qloo numbers only. */
-export function explainMove(moveText: string, before: LineupScore, after: LineupScore, h2h: HeadToHead | undefined, primaryName: string): string {
+export function explainMove(moveText: string, before: LineupScore, after: LineupScore, tastes: TasteOverlap | undefined, primaryName: string): string {
   const parts: string[] = [];
   const b0 = before.brands.find((b) => b.name === primaryName);
   const b1 = after.brands.find((b) => b.name === primaryName);
@@ -405,6 +457,9 @@ export function explainMove(moveText: string, before: LineupScore, after: Lineup
   const dm = before.parts.momentum !== undefined && after.parts.momentum !== undefined ? after.parts.momentum - before.parts.momentum : 0;
   if (Math.abs(dm) >= 0.01) parts.push(`momentum ${dm > 0 ? "up" : "down"} ${Math.abs(dm).toFixed(2)}`);
   let text = `${moveText}: ${parts.join(", ") || "objective rises"}; objective ${before.objective} -> ${after.objective}.`;
-  if (h2h?.layout === "parsed" && h2h.topGainers.length) text += ` Head-to-head, the new bill's audience leans more toward ${h2h.topGainers.map((g) => g.name).join(", ")}.`;
+  if (tastes?.layout === "parsed") {
+    if (tastes.onlyB.length) text += ` New tastes in the audience: ${tastes.onlyB.slice(0, 3).map((t) => t.name).join(", ")}.`;
+    if (tastes.meanScore !== undefined) text += ` Shared-taste similarity with the previous bill ${tastes.meanScore.toFixed(2)}.`;
+  }
   return text;
 }

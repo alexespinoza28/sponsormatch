@@ -23,10 +23,11 @@ function sample(overrides: Record<string, unknown> = {}): OptimizeInput {
 }
 
 type Override = (tool: QlooToolName, args: Record<string, unknown>, n: number) => QlooEnvelope | undefined;
+type Transform = (tool: QlooToolName, args: Record<string, unknown>, env: QlooEnvelope) => QlooEnvelope;
 
-/** Mock tools with an optional per-call override; counts every call that reaches "Qloo". */
-function tools(log: CallLog, override?: Override): QlooTools & { reached: number } {
-  const mock = new MockQlooTools({ onCall: log.push });
+/** Mock tools with an optional per-call override or result transform; counts every call that reaches "Qloo". */
+function tools(log: CallLog, override?: Override, transform?: Transform): QlooTools & { reached: number } {
+  const mock = new MockQlooTools({ onCall: log.push, today: NOW });
   const t = {
     mode: "mock" as const,
     reached: 0,
@@ -37,15 +38,16 @@ function tools(log: CallLog, override?: Override): QlooTools & { reached: number
         log.push({ tool, args: args as Record<string, unknown>, status: o.status, durationMs: 0 });
         return o;
       }
-      return mock.call(tool, args);
+      const env = await mock.call(tool, args);
+      return transform ? transform(tool, args as Record<string, unknown>, env) : env;
     },
   };
   return t;
 }
 
-function setup(input: OptimizeInput, opts: { override?: Override; llm?: OptimizerDeps["llm"]; maxIterations?: number } = {}) {
+function setup(input: OptimizeInput, opts: { override?: Override; transform?: Transform; llm?: OptimizerDeps["llm"]; maxIterations?: number } = {}) {
   const log = new CallLog();
-  const inner = tools(log, opts.override);
+  const inner = tools(log, opts.override, opts.transform);
   const qloo = new BudgetedQloo(inner, input.budget);
   const events: OptimizerEvent[] = [];
   const deps: OptimizerDeps = { qloo, log, emit: (e) => events.push(e), llm: opts.llm ?? { enabled: false, model: "m" }, now: NOW, maxIterations: opts.maxIterations };
@@ -157,40 +159,80 @@ describe("lineup optimizer loop (mock Qloo)", () => {
     expect(d.every((x) => x.accepted === false && /no Qloo evidence/.test(x.reason!))).toBe(true);
   });
 
-  it("rejects a move that scores higher when the head-to-head compare contradicts it", async () => {
+  it("rejects a per-lineup fit gain that the same-scale act/venue ranking contradicts", async () => {
     const input = sample();
-    const contra = (args: Record<string, unknown>): QlooEnvelope => ({
-      ...fixture<QlooEnvelope>("compare-brands.json"),
-      // every brand leans to group A (the current lineup)
-      results: { entities: [] },
-      _ids: args,
-    });
-    let brandIds: string[] = [];
-    const override: Override = (tool, args) => {
-      if (tool === "qloo_rank" && args.option_type === "brand") brandIds = args.options as string[];
-      if (tool === "qloo_compare_audiences") {
-        const e = contra(args);
-        e.results = { entities: brandIds.map((id) => ({ entity_id: id, name: id, query: { a: { affinity: 0.8 }, b: { affinity: 0.5 } } })) };
-        return e;
+    const draftNames = new Set(["Mdou Moctar", "Men I Trust", "Cuco", "Santa Barbara Bowl"]);
+    let brandRanks = 0;
+    const transform: Transform = (tool, args, env) => {
+      if (tool !== "qloo_rank" || !Array.isArray(env.results)) return env;
+      const rows = env.results as Array<{ name: string; affinity: number }>;
+      if (args.option_type === "artist" || args.option_type === "place") {
+        // One shared scale: every draft act/venue clearly above every alternative.
+        return { ...env, results: rows.map((r) => ({ ...r, affinity: draftNames.has(r.name) ? 0.9 : 0.1 })) };
       }
-      return undefined;
+      brandRanks += 1;
+      // Per-lineup calls after the draft all claim a big fit gain.
+      return brandRanks === 1 ? env : { ...env, results: rows.map((r) => ({ ...r, affinity: Math.min(0.99, r.affinity + 0.2) })) };
     };
-    const { deps, events } = setup(input, { override });
+    const { deps, events } = setup(input, { transform });
     const r = await runOptimizer(input, deps);
     expect(r.acceptedMoves).toEqual([]);
-    const contradicted = decisions(events).filter((d) => /head-to-head compare_audiences shows the target brands leaning to the current lineup/.test(d.reason!));
+    const d = decisions(events);
+    const contradicted = d.filter((x) => /fit gain is not confirmed/.test(x.reason!));
     expect(contradicted.length).toBeGreaterThan(0);
-    expect(contradicted.every((d) => d.candidate!.objective > r.draft.objective)).toBe(true);
+    for (const x of contradicted) {
+      expect(x.candidate!.objective).toBeGreaterThan(r.draft.objective);
+      expect(x.comparable).toMatchObject({ contradicts: true, inAffinity: 0.1, outAffinity: 0.9 });
+      expect(x.tasteOverlap).toBeUndefined(); // no compare call spent on a rejected move
+    }
   });
 
-  it("accepts on qloo_rank alone when the compare layout is unrecognized, and says so", async () => {
+  it("uses compare_audiences as taste evidence only: an unrecognized layout does not block a move", async () => {
     const input = sample();
     const override: Override = (tool) =>
-      tool === "qloo_compare_audiences" ? ({ ...fixture<QlooEnvelope>("compare-brands.json"), results: { weird: true } } as QlooEnvelope) : undefined;
+      tool === "qloo_compare_audiences" ? ({ ...fixture<QlooEnvelope>("compare-audiences.json"), results: { weird: true } } as QlooEnvelope) : undefined;
     const { deps, events } = setup(input, { override });
     const r = await runOptimizer(input, deps);
     expect(r.acceptedMoves.length).toBeGreaterThan(0);
-    expect(decisions(events).find((d) => d.accepted)!.reason).toMatch(/head-to-head unrecognized/);
+    const acc = decisions(events).find((d) => d.accepted)!;
+    expect(acc.tasteOverlap).toMatchObject({ layout: "unrecognized" });
+    expect(acc.comparable!.contradicts).toBe(false);
+  });
+
+  it("shows taste overlap for accepted moves in the live layout", async () => {
+    const input = sample();
+    const { deps, events } = setup(input);
+    const r = await runOptimizer(input, deps);
+    const acc = decisions(events).filter((d) => d.accepted);
+    expect(acc.length).toBeGreaterThan(0);
+    for (const d of acc) {
+      expect(d.tasteOverlap!.layout).toBe("parsed");
+      expect(d.tasteOverlap!.shared.length).toBeGreaterThan(0);
+      expect(d.comparable).toBeDefined();
+    }
+    expect(r.finalTasteShift?.layout).toBe("parsed");
+  });
+
+  it("empty trend series (recent windows) never block a move", async () => {
+    const input = sample();
+    const transform: Transform = (tool, _args, env) =>
+      tool === "qloo_trends" ? { ...env, series: (env.series as Array<{ entity: unknown }>).map((x) => ({ ...x, points: [] })) } : env;
+    const { deps, events } = setup(input, { transform });
+    const r = await runOptimizer(input, deps);
+    expect(r.acts.every((a) => a.momentum === undefined)).toBe(true);
+    expect(r.best.parts.momentum).toBeUndefined();
+    expect(r.acceptedMoves.length).toBeGreaterThan(0);
+    const profile = events.find((e) => e.type === "setup" && e.phase === "profile" && e.status === "done");
+    expect(JSON.stringify(profile)).toContain("No recent trend data");
+  });
+
+  it("asks Qloo for trends in a lagged window with 20 weekly points", async () => {
+    const input = sample();
+    const { deps, events } = setup(input);
+    await runOptimizer(input, deps);
+    const calls = events.flatMap((e) => ("calls" in e && e.calls ? e.calls : [])).filter((c) => c.tool === "qloo_trends");
+    expect(calls.length).toBe(2);
+    for (const c of calls) expect(c.args).toMatchObject({ start_date: "2026-02-05", end_date: "2026-06-24", limit: 20 });
   });
 
   it("surfaces needs_input candidates from the act ranking and honors pins", async () => {

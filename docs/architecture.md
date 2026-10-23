@@ -41,20 +41,26 @@ setup     describe brands -> rank acts (artist) -> rank venues (place)
           -> entity_tags per act -> trends (5 acts per call) -> rank brands for the draft
 loop      planner proposes one move
           -> qloo_rank (brands) for the new lineup                         [evidence]
-          -> if objective rises by >= 0.3: qloo_compare_audiences, current vs. new
+          -> if objective rises by >= 0.3: same-scale check against the setup
+             act/venue ranking (no extra call)
           -> accept or reject in code                                       [decision]
+          -> accepted: qloo_compare_audiences, previous vs. new bill (taste evidence)
 stop      planner stops | no untried legal move | 3 (heuristic) / 4 (any) rejections in a row
           | budget minus 1 reserved call | 10 iterations
-final     qloo_recommend (brands, explain) for the best lineup; draft-vs-final compare if not already run
+final     qloo_recommend (brands, explain) for the best lineup; draft-vs-final taste compare if not already run
 ```
 
 Acceptance rule (`search.ts`): a move is accepted only if
 
 1. the new lineup has an `ok` `qloo_rank` result containing at least one target brand, and
 2. its objective beats the current one by at least 0.3 points, and
-3. a parsed head-to-head does not show the target brands leaning toward the current lineup (mean `b - a` below -0.01).
+3. if the lineup's fit part rose, the **same-scale check** agrees: in the one setup `qloo_rank` call that scored every candidate act (option_type artist) or venue (option_type place) against the target brands together, the incoming act or venue is not more than 0.02 below the one it replaces. A move that wins on cohesion or momentum alone needs no fit confirmation. If the venue was never scored, the per-lineup `qloo_rank` decides and the trace says so.
 
-If the compare layout cannot be read, or the budget leaves no room for it, the move is accepted on `qloo_rank` alone and the trace says so.
+### Why a same-scale check, not a head-to-head compare
+
+Qloo's harness says `qloo_rank` scores from separate calls are not directly comparable, and each lineup is scored in its own call. The first design confirmed gains with `qloo_compare_audiences` (`target_type: brand`). The Oct 22 live probe showed that compare returns shared and per-side **tags** (`results = {tags, a, b, matchEntities}`) with no per-side brand numbers, and `target_type: brand` adds no brand rows. So a brand-fit comparison has to come from `qloo_rank`. Ranking the lineups themselves in one call is impossible (a lineup is not an entity), and ranking the target brands against the union of both lineups would score a blend. The comparable signal Qloo does offer is one call that ranks all candidate acts (or venues) against the brands; a swap changes exactly one act, so comparing the outgoing and incoming act on that shared scale confirms or refutes the direction of the gain at no extra cost.
+
+`qloo_compare_audiences` is still called once per accepted move (and draft vs. final) as taste evidence: shared tastes with Qloo's similarity score (`tags[].query.score`), plus tags only one side has (`a[]`/`b[]` with `query.count`). It is shown in the trace and evidence cards and never decides a move.
 
 Evaluations are cached by lineup (act set + slot), and the planner never re-proposes a tested lineup. Legal moves respect each act's unavailable dates.
 
@@ -69,13 +75,18 @@ All in `scoring.ts`, unit-tested:
 
 - **Fit** = weighted mean of target-brand affinities from the lineup's `qloo_rank` call; the primary (first) brand counts double.
 - **Cohesion** = mean pairwise weighted Jaccard overlap of the acts' `qloo_entity_tags` profiles (sum of mins over sum of maxes across the union of tags).
-- **Momentum** = per act, relative change between the mean of the first and last thirds of the `qloo_trends` series (rank fields flipped so up is good), clamped to [-1, 1]; the lineup's mean is mapped to [0, 1].
+- **Momentum** = per act, relative change between the mean of the first and last thirds of the `qloo_trends` series sorted by date (population_percentile; population_rank flipped as a fallback), clamped to [-1, 1]; the lineup's mean is mapped to [0, 1]. When any candidate act has trend data, acts without it count as 0 (flat).
 - **Objective** = goal-weighted blend of the parts present, x 100.
 - **Sponsor side**: event score = 75% mean act affinity + 25% venue affinity for the brand's audience; index = score / mean score of the pasted list x 100. More than 10 acts are ranked in several calls that share an anchor act; later calls are rescaled by the anchor's affinity ratio.
 
-## Unverified layouts
+## Pass-through layouts (confirmed in the Oct 22 live probe)
 
-`qloo_compare_audiences` passes Qloo's `/v2/analysis/compare` `results` through unchanged, and `qloo_trends` passes raw `/v2/trending` points; neither layout is fixed by the harness. `parse.ts` accepts several plausible layouts (`query.a.affinity` / `query.b.affinity`, `affinity_a` / `affinity_b`, a `delta` field; `population_percentile`, `population_rank`, `popularity` for trends) and reports "layout not recognized" with the keys it saw instead of guessing. Check both against the live API; the fixtures `compare-brands.json` and `trends.json` are assumptions.
+The harness passes Qloo's raw results through for two tools, so `parse.ts` reads them directly and reports "layout not recognized" with the keys it saw instead of guessing:
+
+- `qloo_compare_audiences`: `results = {tags: [...], a: [...], b: [...], matchEntities: []}`. `tags[i]` = `{tag_id, name, type: "urn:tag", subtype, entity_id, popularity, query: {score, "a.signal.interests.entities", "b.signal.interests.entities"}}`; `a[i]`/`b[i]` = each side's own tags with `query.count`. Bare names in the groups return `needs_input` (artist vs. person), so only IDs are sent.
+- `qloo_trends`: `series = [{entity: {input, entityId, name, type, match}, points: [...]}]`, weekly, newest first, capped by `limit`. Point keys: `date`, `population_percentile` (0..1), `population_rank` (a string), `population_rank_velocity`, `velocity_fold_change`, `population_percent_delta`. A window ending today returned `points: []`; windows ending months back returned data. SponsorMatch asks for 20 weekly points in a 20-week window ending 120 days before today, computes momentum from the population_percentile change (rank as fallback), shows "no recent trend data" for empty series, and counts those acts as flat so missing data never blocks or helps a move.
+
+Fixtures `compare-audiences.json`, `trends.json` and `rank-artists-ok.json` reproduce these layouts with synthetic values.
 
 ## Mock mode
 
@@ -103,6 +114,6 @@ Read only by server code; never sent to the browser.
 
 ## Known limitations
 
-- Qloo has no date-level affinity. Dates are availability constraints; momentum uses the 90 days before today.
-- `qloo_rank` scores from separate calls are query-relative. The head-to-head check addresses this for accepted moves; rejected moves rely on `qloo_rank` alone.
-- The compare and trends layouts above are unverified until the live test.
+- Qloo has no date-level affinity. Dates are availability constraints; momentum uses a 20-week window ending about four months before today, because recent trend data is not available yet.
+- `qloo_rank` scores from separate calls are query-relative. The same-scale check addresses this for accepted fit gains; rejected moves rely on per-lineup `qloo_rank` alone. The same-scale act ranking uses the draft venue's city as `signal_location`.
+- `qloo_compare_audiences` gives taste overlap, not brand fit, so it explains moves without scoring them.

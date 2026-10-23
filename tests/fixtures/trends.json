@@ -4,8 +4,8 @@
   "status": "ok",
   "interpretation": {
     "entity_type": "urn:entity:artist",
-    "start_date": "2026-07-23",
-    "end_date": "2026-10-21"
+    "start_date": "2026-01-01",
+    "end_date": "2026-06-30"
   },
   "series": [
     {
@@ -13,24 +13,57 @@
         "input": "0A1B2C3D-0000-4000-A000-000000000001",
         "entityId": "0A1B2C3D-0000-4000-A000-000000000001",
         "name": "The Fixture Tones",
+        "type": "urn:entity:artist",
         "match": "identifier"
       },
       "points": [
         {
-          "date": "2026-07-23",
-          "population_percentile": 0.5
+          "date": "2026-06-28",
+          "population_percentile": 0.66,
+          "population_rank": "17000",
+          "population_rank_velocity": 500,
+          "velocity_fold_change": 1.02,
+          "population_percent_delta": 0.015
         },
         {
-          "date": "2026-08-23",
-          "population_percentile": 0.55
+          "date": "2026-06-21",
+          "population_percentile": 0.65,
+          "population_rank": "17500",
+          "population_rank_velocity": 400,
+          "velocity_fold_change": 1.01,
+          "population_percent_delta": 0.016
         },
         {
-          "date": "2026-09-23",
-          "population_percentile": 0.6
+          "date": "2026-06-14",
+          "population_percentile": 0.64,
+          "population_rank": "18000",
+          "population_rank_velocity": 0,
+          "velocity_fold_change": 1,
+          "population_percent_delta": 0.0
         },
         {
-          "date": "2026-10-21",
-          "population_percentile": 0.65
+          "date": "2026-06-07",
+          "population_percentile": 0.6,
+          "population_rank": "20000",
+          "population_rank_velocity": -100,
+          "velocity_fold_change": 0.99,
+          "population_percent_delta": -0.01
+        },
+        {
+          "date": "2026-05-31",
+          "population_percentile": 0.55,
+          "population_rank": "22500",
+          "population_rank_velocity": 0,
+          "velocity_fold_change": 1,
+          "population_percent_delta": 0.0
+        },
+        {
+          "date": "2026-05-24",
+          "population_percentile": 0.5,
+          "population_rank": "25000",
+          "population_rank_velocity": 0,
+          "velocity_fold_change": 1,
+          "population_percent_delta": 0.0
         }
       ]
     },
@@ -39,29 +72,48 @@
         "input": "0A1B2C3D-0000-4000-A000-000000000002",
         "entityId": "0A1B2C3D-0000-4000-A000-000000000002",
         "name": "Fixture Revival",
+        "type": "urn:entity:artist",
         "match": "identifier"
       },
       "points": [
         {
-          "date": "2026-07-23",
-          "population_rank": 1000
+          "date": "2026-06-28",
+          "population_percentile": 0.9,
+          "population_rank": "5000",
+          "population_rank_velocity": 0,
+          "velocity_fold_change": 1,
+          "population_percent_delta": 0
         },
         {
-          "date": "2026-08-23",
-          "population_rank": 1100
+          "date": "2026-06-21",
+          "population_percentile": 0.9,
+          "population_rank": "5000",
+          "population_rank_velocity": 0,
+          "velocity_fold_change": 1,
+          "population_percent_delta": 0
         },
         {
-          "date": "2026-09-23",
-          "population_rank": 1200
-        },
-        {
-          "date": "2026-10-21",
-          "population_rank": 1250
+          "date": "2026-06-14",
+          "population_percentile": 0.9,
+          "population_rank": "5000",
+          "population_rank_velocity": 0,
+          "velocity_fold_change": 1,
+          "population_percent_delta": 0
         }
       ]
+    },
+    {
+      "entity": {
+        "input": "0A1B2C3D-0000-4000-A000-000000000003",
+        "entityId": "0A1B2C3D-0000-4000-A000-000000000003",
+        "name": "Fixture Newcomer",
+        "type": "urn:entity:artist",
+        "match": "identifier"
+      },
+      "points": []
     }
   ],
-  "result_count": 2,
+  "result_count": 3,
   "execution": {
     "transport": "mcp",
     "transport_name": "Qloo canonical MCP",

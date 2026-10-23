@@ -1,9 +1,9 @@
 import { interpretedEntity, issueCandidates, resolutionIssues, resultEntities, resultTags } from "@/lib/qloo/normalize";
 import type { InsightsEntityType, QlooCandidate, QlooTools, SearchEntityType } from "@/lib/qloo/types";
 import { classify } from "./budget";
-import { headToHead, parseTrends, rankAffinities } from "./parse";
+import { parseTrends, rankAffinities, tasteOverlap } from "./parse";
 import { round } from "./scoring";
-import type { Choice, HeadToHead, Momentum, ResolvedEntity, TagAffinity } from "./types";
+import type { Choice, Momentum, ResolvedEntity, TagAffinity, TasteOverlap } from "./types";
 
 // Qloo evidence-gathering steps shared by the optimizer and the sponsor-side
 // ranker. Each function makes a known, small number of MCP tool calls and
@@ -192,10 +192,18 @@ export async function entityTags(qloo: QlooTools, notes: Notes, id: string, labe
     .map((t) => ({ id: t.id, name: t.name, affinity: round(t.affinity!) }));
 }
 
-/** ISO dates for a trailing window ending yesterday (Qloo trends are historical). */
-export function trendWindow(now: Date, days = 90): { start: string; end: string } {
-  const end = new Date(now.getTime() - 86_400_000);
-  const start = new Date(end.getTime() - days * 86_400_000);
+/**
+ * Trend window. Qloo's trending data lags: in the Oct 22 live probe a window
+ * ending today returned no points, while windows ending months earlier did.
+ * So the window ends TREND_LAG_DAYS before today and spans 20 weeks, and the
+ * call asks for 20 points (one per week).
+ */
+export const TREND_LAG_DAYS = 120;
+export const TREND_WEEKS = 20;
+
+export function trendWindow(now: Date): { start: string; end: string } {
+  const end = new Date(now.getTime() - TREND_LAG_DAYS * 86_400_000);
+  const start = new Date(end.getTime() - (TREND_WEEKS * 7 - 1) * 86_400_000);
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
 }
 
@@ -209,29 +217,17 @@ export async function momentum(
 ): Promise<Map<string, Momentum>> {
   const out = new Map<string, Momentum>();
   for (let i = 0; i < ids.length; i += 5) {
-    const env = await qloo.call("qloo_trends", { entities: ids.slice(i, i + 5), entity_type: entityType, start_date: window.start, end_date: window.end, limit: 13 });
+    const env = await qloo.call("qloo_trends", { entities: ids.slice(i, i + 5), entity_type: entityType, start_date: window.start, end_date: window.end, limit: TREND_WEEKS });
     if (check(notes, env, "Trends") !== "ok") continue;
     for (const [id, m] of parseTrends(env)) out.set(id, m);
   }
   return out;
 }
 
-/** One qloo_compare_audiences call (group A vs. group B). */
-export async function compareGroups(
-  qloo: QlooTools,
-  notes: Notes,
-  groupA: string[],
-  groupB: string[],
-  targetIds: string[],
-  targetType?: InsightsEntityType,
-): Promise<HeadToHead> {
-  const env = await qloo.call("qloo_compare_audiences", {
-    group_a: groupA.slice(0, 10),
-    group_b: groupB.slice(0, 10),
-    ...(targetType ? { target_type: targetType } : {}),
-    limit: 20,
-  });
+/** One qloo_compare_audiences call (group A vs. group B), read as taste overlap. */
+export async function compareTastes(qloo: QlooTools, notes: Notes, groupA: string[], groupB: string[]): Promise<TasteOverlap> {
+  const env = await qloo.call("qloo_compare_audiences", { group_a: groupA.slice(0, 10), group_b: groupB.slice(0, 10), limit: 20 });
   const c = classify(env);
   if (c.warning) notes.warnings.push(`Compare audiences: ${c.warning}`);
-  return headToHead(env, targetIds);
+  return tasteOverlap(env);
 }

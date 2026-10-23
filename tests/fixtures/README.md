@@ -11,7 +11,18 @@ Shapes confirmed by the Oct 22 live test and mirrored here:
   entity_id, name, type, subtype, popularity, affinity, explainability,
   properties; explainability is `{"signal.interests.entities":[{entity_id, score}]}`.
 
-Assumed (not yet seen live): `compare-brands.json` (the harness passes
-/v2/analysis/compare `results` through unchanged) and `trends.json` (raw
-/v2/trending points). The parsers in src/lib/optimizer/parse.ts accept several
-layouts and report an unrecognized one instead of guessing.
+Also from the Oct 22 live probe:
+- `rank-artists-ok.json`: `qloo_rank` with option_type artist, bare names as
+  options and a brand ID in signals: ok with no needs_input; results carry
+  entity_id, name, type "urn:entity", subtype "urn:entity:artist", popularity,
+  affinity, properties.
+- `compare-audiences.json`: `results` is an object `{tags, a, b, matchEntities}`.
+  `tags[]` are shared tastes with `query.score`; `a[]`/`b[]` are each side's own
+  tags with `query.count`. `target_type: "brand"` adds no brand rows
+  (`matchEntities` empty), so there are no per-side affinities.
+- `trends.json`: `series[].entity` has input/entityId/name/type/match; points are
+  weekly and newest first with population_percentile (0..1), population_rank
+  (a string), population_rank_velocity, velocity_fold_change,
+  population_percent_delta. A window ending today returns `points: []` (data
+  lags); the third series reproduces that. A big act can be flat (velocity 0),
+  like the second series.

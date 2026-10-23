@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { headToHead, parseTrends } from "@/lib/optimizer/parse";
+import { parseTrends, tasteOverlap } from "@/lib/optimizer/parse";
 import { MOCK_AMBIGUOUS_ARTISTS, MockQlooTools, fakeUuid, hash01 } from "@/lib/qloo/mock";
 import { explainabilityScores, interpretedEntity, issueCandidates, resolutionIssues, resultEntities, resultTags } from "@/lib/qloo/normalize";
 import type { QlooToolCallRecord } from "@/lib/qloo/types";
@@ -73,20 +73,27 @@ describe("MockQlooTools", () => {
   });
 
   it("returns per-entity tags, trends series and head-to-head comparisons", async () => {
-    const mock = new MockQlooTools();
+    const mock = new MockQlooTools({ today: new Date("2026-10-22T12:00:00Z") });
     const a = await artistId(mock, "Khruangbin");
     const b = await artistId(mock, "Cuco");
     const tags = resultTags(await mock.call("qloo_entity_tags", { entities: [a], limit: 5 }));
     expect(tags).toHaveLength(5);
     expect(tags.every((t) => typeof t.affinity === "number")).toBe(true);
-    const trends = await mock.call("qloo_trends", { entities: [a, b], entity_type: "artist", start_date: "2026-07-23", end_date: "2026-10-21" });
-    expect(parseTrends(trends).size).toBe(2);
+    const old = await mock.call("qloo_trends", { entities: [a, b], entity_type: "artist", start_date: "2026-01-01", end_date: "2026-06-30", limit: 20 });
+    const series = old.series as Array<{ points: Array<{ date: string; population_rank: unknown }> }>;
+    expect(series[0]!.points).toHaveLength(20);
+    expect(series[0]!.points[0]!.date > series[0]!.points[1]!.date).toBe(true); // newest first
+    expect(typeof series[0]!.points[0]!.population_rank).toBe("string");
+    expect(parseTrends(old).size).toBe(2);
+    const recent = await mock.call("qloo_trends", { entities: [a], entity_type: "artist", start_date: "2026-07-24", end_date: "2026-10-22" });
+    expect((recent.series as Array<{ points: unknown[] }>)[0]!.points).toEqual([]);
     const cmp = await mock.call("qloo_compare_audiences", { group_a: [a], group_b: [b], target_type: "brand", limit: 20 });
-    const h = headToHead(cmp, []);
-    expect(h.layout).toBe("parsed");
-    expect(h.rows.length).toBeGreaterThan(0);
-    const tagsCmp = headToHead(await mock.call("qloo_compare_audiences", { group_a: [a], group_b: [b] }), []);
-    expect(tagsCmp.rows[0]!.id).toMatch(/^urn:tag:/);
+    expect(Object.keys(cmp.results as object).sort()).toEqual(["a", "b", "matchEntities", "tags"]);
+    expect((cmp.results as { matchEntities: unknown[] }).matchEntities).toEqual([]);
+    const t = tasteOverlap(cmp);
+    expect(t.layout).toBe("parsed");
+    expect(t.shared).toHaveLength(20);
+    expect((await mock.call("qloo_compare_audiences", { group_a: ["Mitski"], group_b: [b] })).status).toBe("needs_input");
   });
 
   it("reports unsupported tools as error envelopes", async () => {

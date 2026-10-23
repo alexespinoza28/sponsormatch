@@ -1,6 +1,6 @@
 import type { QlooTools } from "@/lib/qloo/types";
 import { CallLog, QlooAuthError } from "./budget";
-import { compareGroups, describeEntity, momentum, Notes, rankOptions, trendWindow } from "./qloo-steps";
+import { compareTastes, describeEntity, momentum, Notes, rankOptions, trendWindow } from "./qloo-steps";
 import { round } from "./scoring";
 import type { RankedEvent, SponsorEvent, SponsorInput, SponsorResult } from "./types";
 
@@ -119,12 +119,13 @@ export async function runSponsorRanking(
     if (headliners.length) {
       const m = await momentum(qloo, n, headliners, "artist", trendWindow(deps.now ?? new Date()));
       for (const e of events) for (const a of e.acts) if (a.id && m.has(a.id)) Object.assign(a, { momentum: m.get(a.id) });
+      if (!m.size) n.notes.push("No recent trend data for the top events' headliners (Qloo trend data lags).");
     }
     let sharedTastes: SponsorResult["sharedTastes"];
     const best = events[0];
     if (best && best.score > 0) {
       const ids = [...best.acts.flatMap((a) => (a.id ? [a.id] : [])), ...(best.venue?.id ? [best.venue.id] : [])];
-      if (ids.length) sharedTastes = await compareGroups(qloo, n, [brand.id], ids, []);
+      if (ids.length) sharedTastes = await compareTastes(qloo, n, [brand.id], ids);
     }
     done(
       "Check momentum and shared tastes for the top events",

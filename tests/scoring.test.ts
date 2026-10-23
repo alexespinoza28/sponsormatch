@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { headToHead, parseCompareRows, parseTrends, rankAffinities } from "@/lib/optimizer/parse";
+import { parseTrends, rankAffinities, tasteOverlap } from "@/lib/optimizer/parse";
 import {
   brandFit,
   cohesion,
@@ -13,6 +13,7 @@ import {
   scoreLineup,
   tagOverlap,
 } from "@/lib/optimizer/scoring";
+import { trendWindow } from "@/lib/optimizer/qloo-steps";
 import type { ActProfile } from "@/lib/optimizer/types";
 import { explainabilityScores, resultEntities } from "@/lib/qloo/normalize";
 import type { QlooEnvelope } from "@/lib/qloo/types";
@@ -60,9 +61,12 @@ describe("scoring math", () => {
     expect(cohesion([x, act("w", [])])).toBeUndefined();
   });
 
-  it("lineupMomentum maps mean momentum from [-1,1] to [0,1]", () => {
+  it("lineupMomentum maps mean momentum from [-1,1] to [0,1]; missing trends count as flat when asked", () => {
     expect(lineupMomentum([act("a", [], 0, 0.2), act("b", [], 0, -0.6)])).toBe(0.4);
     expect(lineupMomentum([act("a", [])])).toBeUndefined();
+    expect(lineupMomentum([act("a", [], 0, 0.4), act("b", [])])).toBe(0.7);
+    expect(lineupMomentum([act("a", [], 0, 0.4), act("b", [])], true)).toBe(0.6);
+    expect(lineupMomentum([act("a", [])], true)).toBe(0.5);
   });
 
   it("objective blends parts by goal and renormalizes missing parts", () => {
@@ -110,30 +114,45 @@ describe("parsing harness results", () => {
     expect(explainabilityScores(coffee!).get(A2)).toBe(0.3);
   });
 
-  it("parses compare rows from several layouts and computes b - a", () => {
-    const h = headToHead(env("compare-brands.json"), [B1, B2]);
-    expect(h.layout).toBe("parsed");
-    expect(h.targetsFound).toEqual([B1, B2]);
-    expect(h.targetLean).toBe(0.01); // (0.06 + -0.04) / 2
-    expect(h.topGainers.map((g) => g.name)).toEqual(["Testbrand Cider", "Testbrand Coffee"]);
-    expect(parseCompareRows([{ entity_id: "x", name: "X", affinity_a: 0.2, affinity_b: 0.5 }])).toEqual([{ id: "x", name: "X", a: 0.2, b: 0.5, delta: 0.3 }]);
-    expect(parseCompareRows({ tags: [{ tag_id: "t", name: "T", a: 0.4, b: 0.1 }] })[0]).toMatchObject({ delta: -0.3 });
-    expect(parseCompareRows({ results: [{ id: "y", name: "Y", query: { delta: 0.2 } }] })[0]).toEqual({ id: "y", name: "Y", delta: 0.2 });
+  it("reads rank results for bare artist names (live shape)", () => {
+    const { byId, inputs } = rankAffinities(env("rank-artists-ok.json"));
+    expect(inputs.get("Fixture Revival")).toMatchObject({ id: A2, match: "exact" });
+    expect(byId.get(A1)).toBe(0.734);
+  });
+
+  it("reads compare_audiences as taste overlap (live layout: tags/a/b/matchEntities)", () => {
+    const t = tasteOverlap(env("compare-audiences.json"));
+    expect(t.layout).toBe("parsed");
+    expect(t.shared.map((x) => [x.name, x.score])).toEqual([
+      ["Dream Pop", 0.98],
+      ["Indie Folk", 0.91],
+      ["Bedroom Pop", 0.87],
+    ]);
+    expect(t.meanScore).toBe(0.92);
+    expect(t.onlyA).toEqual([{ id: "urn:tag:genre:qloo:shoegaze", name: "Shoegaze", count: 18 }]);
+    expect(t.onlyB.map((x) => x.name)).toEqual(["Art Pop"]);
   });
 
   it("says when a compare layout is unrecognized or the call failed, without inventing numbers", () => {
-    const odd = { ...env("compare-brands.json"), results: { entities: [{ entity_id: "x", name: "X", score: 3 }] } } as QlooEnvelope;
-    const h = headToHead(odd, [B1]);
-    expect(h.layout).toBe("unrecognized");
-    expect(h.targetLean).toBeUndefined();
-    expect(h.note).toContain("not recognized");
-    const failed = { ...env("compare-brands.json"), status: "error", summary: "boom" } as QlooEnvelope;
-    expect(headToHead(failed, [B1])).toMatchObject({ layout: "unavailable", rows: [] });
+    const odd = { ...env("compare-audiences.json"), results: { entities: [{ entity_id: "x", name: "X", score: 3 }] } } as QlooEnvelope;
+    const t = tasteOverlap(odd);
+    expect(t.layout).toBe("unrecognized");
+    expect(t.shared).toEqual([]);
+    expect(t.note).toContain("results: entities");
+    const failed = { ...env("compare-audiences.json"), status: "error", summary: "boom" } as QlooEnvelope;
+    expect(tasteOverlap(failed)).toMatchObject({ layout: "unavailable", shared: [] });
   });
 
-  it("parses trends series (percentile up, rank down)", () => {
+  it("parses live trends: newest-first points, string ranks, flat and empty series", () => {
     const m = parseTrends(env("trends.json"));
-    expect(m.get(A1)).toMatchObject({ metric: "population_percentile", value: 0.3 });
-    expect(m.get(A2)!.value).toBeLessThan(0);
+    expect(m.get(A1)).toMatchObject({ metric: "population_percentile", value: 0.248, first: 0.525, last: 0.655, points: 6 });
+    expect(m.get(A2)!.value).toBe(0);
+    expect(m.has("0A1B2C3D-0000-4000-A000-000000000003")).toBe(false);
+    const rankOnly = momentumFromPoints([{ date: "2026-06-28", population_rank: "900" }, { date: "2026-06-21", population_rank: "1000" }]);
+    expect(rankOnly).toMatchObject({ metric: "population_rank", value: 0.1 });
+  });
+
+  it("trend window ends months back because Qloo trend data lags", () => {
+    expect(trendWindow(new Date("2026-10-22T12:00:00Z"))).toEqual({ start: "2026-02-05", end: "2026-06-24" });
   });
 });

@@ -76,6 +76,7 @@ export interface ActProfile {
   brandAffinity?: number;
   /** Taste tags from qloo_entity_tags for this act alone. */
   tags: TagAffinity[];
+  /** Undefined when Qloo returned no trend points for the window ("no recent trend data"). */
   momentum?: Momentum;
 }
 
@@ -120,27 +121,45 @@ export interface LineupScore {
 
 export type Move = { kind: "swap"; out: string; in: string } | { kind: "slot"; to: number };
 
-/** One row of a head-to-head qloo_compare_audiences result. */
-export interface CompareRow {
+export interface TasteTag {
   id: string;
   name: string;
-  a?: number;
-  b?: number;
-  /** b - a: positive = leans toward group B. */
-  delta?: number;
+  /** Similarity score of a shared taste (compare_audiences tags[].query.score). */
+  score?: number;
+  /** Strength of a side's own tag (compare_audiences a[]/b[].query.count). */
+  count?: number;
 }
 
-export interface HeadToHead {
-  /** "parsed" = rows with a/b affinities; "unrecognized" = Qloo answered in a layout we could not read. */
+/**
+ * Taste overlap between two signal groups from one qloo_compare_audiences
+ * call: shared tastes with similarity scores, and tags found only on one side.
+ * It has no per-side brand affinities, so it explains audience change; it does
+ * not score brand fit.
+ */
+export interface TasteOverlap {
+  /** "unrecognized" = Qloo answered in a layout we could not read; "unavailable" = not run or failed. */
   layout: "parsed" | "unrecognized" | "unavailable";
-  rows: CompareRow[];
-  /** Mean (b - a) across target brands found in the rows. */
-  targetLean?: number;
-  targetsFound: string[];
-  /** Brands that lean most toward group B. */
-  topGainers: CompareRow[];
+  shared: TasteTag[];
+  onlyA: TasteTag[];
+  onlyB: TasteTag[];
+  meanScore?: number;
   note?: string;
   evidenceId?: string;
+}
+
+/**
+ * Comparable brand-fit check for a move, read from one setup qloo_rank call
+ * that scored every candidate act (or venue) against the target brands
+ * together. Within one call the scores share a scale.
+ */
+export interface ComparableCheck {
+  kind: "acts" | "venues" | "none";
+  outName?: string;
+  inName?: string;
+  outAffinity?: number;
+  inAffinity?: number;
+  contradicts: boolean;
+  note: string;
 }
 
 export interface BudgetState {
@@ -160,7 +179,8 @@ export interface IterationEvent {
   rationale?: string;
   proposerNote?: string;
   candidate?: LineupScore;
-  headToHead?: HeadToHead;
+  comparable?: ComparableCheck;
+  tasteOverlap?: TasteOverlap;
   accepted?: boolean;
   reason?: string;
   explanation?: string;
@@ -202,7 +222,8 @@ export interface OptimizeResult {
   /** Objective of every evaluated lineup, in order (baseline first). */
   history: Array<{ iteration: number; objective: number; accepted: boolean; best: number }>;
   acceptedMoves: Array<{ iteration: number; moveText: string; explanation: string }>;
-  finalHeadToHead?: HeadToHead;
+  /** qloo_compare_audiences: draft (A) vs. recommended (B) taste overlap. */
+  finalTasteShift?: TasteOverlap;
   nextSponsors: NextSponsor[];
   /** Shared top tags between act pairs in the final lineup (from qloo_entity_tags). */
   cohesionPairs: Array<{ a: string; b: string; overlap: number; shared: string[] }>;
@@ -257,8 +278,8 @@ export interface SponsorResult {
   brand: ResolvedEntity;
   events: RankedEvent[];
   recommendation?: { eventName: string; reason: string };
-  /** qloo_compare_audiences: brand vs. the top event's lineup. */
-  sharedTastes?: HeadToHead;
+  /** qloo_compare_audiences: brand (A) vs. the top event's lineup (B). */
+  sharedTastes?: TasteOverlap;
   toolCallCount: number;
   choices: Choice[];
   notes: string[];

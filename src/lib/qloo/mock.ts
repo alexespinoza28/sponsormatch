@@ -22,7 +22,7 @@ import { QLOO_TOOL_NAMES } from "./types";
 //
 // To keep the optimizer's behavior meaningful offline, every entity gets a
 // synthetic taste vector over the catalog's tag pool. Affinity, tag profiles,
-// head-to-head comparisons and explainability are all derived from those
+// audience comparisons and explainability are all derived from those
 // vectors, so swapping an act changes every score consistently.
 //
 // The mock mirrors behavior confirmed in the Oct 22 live test: a bare artist
@@ -117,6 +117,9 @@ function centeredCosine(a: number[], b: number[]): number {
 
 let correlation = 0;
 
+/** Trend data lags: the live API returned no points for a window ending today (Oct 22 probe). */
+export const TRENDS_LAG_DAYS = 100;
+
 export class MockQlooTools implements QlooTools {
   readonly mode = "mock" as const;
   readonly #onCall?: (record: QlooToolCallRecord) => void;
@@ -125,9 +128,12 @@ export class MockQlooTools implements QlooTools {
   readonly #known = new Map<string, QlooResultEntity>();
   readonly #vectors = new Map<string, number[]>();
 
-  constructor(options: { onCall?: (record: QlooToolCallRecord) => void; latencyMs?: number } = {}) {
+  readonly #today: Date;
+
+  constructor(options: { onCall?: (record: QlooToolCallRecord) => void; latencyMs?: number; today?: Date } = {}) {
     this.#onCall = options.onCall;
     this.#latencyMs = options.latencyMs ?? 0;
+    this.#today = options.today ?? new Date();
     for (const b of BRANDS) this.#known.set(b.entity_id, this.#compactBrand(b));
     for (const key of MOCK_AMBIGUOUS_ARTISTS) this.#ambiguousCandidates(key);
   }
@@ -466,11 +472,10 @@ export class MockQlooTools implements QlooTools {
   }
 
   /**
-   * Head-to-head comparison of two signal groups. The real /v2/analysis/compare
-   * layout is not documented in the harness (it passes `results` through), so
-   * this mock uses one plausible layout: results.entities[] (or results.tags[]
-   * without target_type) with query.a.affinity / query.b.affinity. The parser
-   * in src/lib/optimizer/compare.ts accepts several layouts.
+   * Audience comparison in the layout seen live on Oct 22: `results` is an
+   * object {tags, a, b, matchEntities}. `tags` are shared tastes with a
+   * similarity score in query.score; `a` and `b` are each side's own tags with
+   * query.count. target_type is accepted but, as live, produces no entity rows.
    */
   #compare(a: QlooToolInputs["qloo_compare_audiences"]): QlooEnvelope {
     const ga = this.#resolveMany(a.group_a, "group_a");
@@ -481,62 +486,71 @@ export class MockQlooTools implements QlooTools {
     const bIds = gb.resolved.map((e) => e.entityId);
     const limit = a.limit ?? 10;
     const query: Record<string, unknown> = { "a.signal.interests.entities": aIds, "b.signal.interests.entities": bIds, take: limit };
-    let results: Record<string, unknown>;
-    if (a.target_type === "brand") {
-      query["filter.type"] = "urn:entity:brand";
-      const extra = [...this.#known.values()].filter((e) => e.subtype === "urn:entity:brand" && !BRANDS.some((b) => b.entity_id === e.entity_id));
-      const pool = [...BRANDS.map((b) => this.#known.get(b.entity_id)!), ...extra];
-      const rows = pool
-        .map((e) => {
-          const fa = this.#affinity(e.entity_id, aIds);
-          const fb = this.#affinity(e.entity_id, bIds);
-          return { entity_id: e.entity_id, name: e.name, type: "urn:entity", subtype: e.subtype, popularity: e.popularity, query: { a: { affinity: fa }, b: { affinity: fb }, delta: r3(fb - fa) } };
-        })
-        .sort((x, y) => Math.abs(y.query.delta) - Math.abs(x.query.delta))
-        .slice(0, limit);
-      results = { entities: rows };
-    } else {
-      const va = this.#meanVector(aIds);
-      const vb = this.#meanVector(bIds);
-      const maxA = Math.max(...va);
-      const maxB = Math.max(...vb);
-      const rows = TAG_POOL.map((t, i) => {
-        const fa = r3(clamp(0.15 + 0.8 * (va[i]! / maxA), 0, 0.99));
-        const fb = r3(clamp(0.15 + 0.8 * (vb[i]! / maxB), 0, 0.99));
-        return { tag_id: t.tag_id, name: t.name, subtype: t.subtype, query: { a: { affinity: fa }, b: { affinity: fb }, delta: r3(fb - fa) } };
-      })
-        .sort((x, y) => Math.min(y.query.a.affinity, y.query.b.affinity) - Math.min(x.query.a.affinity, x.query.b.affinity))
-        .slice(0, limit);
-      results = { tags: rows };
-    }
+    if (a.target_type) query["filter.type"] = TYPE_URN[a.target_type] ?? `urn:entity:${a.target_type}`;
+    const va = this.#meanVector(aIds);
+    const vb = this.#meanVector(bIds);
+    const maxA = Math.max(...va);
+    const maxB = Math.max(...vb);
+    const tag = (t: CatalogTag, extra: Record<string, unknown>, q: Record<string, unknown>) => ({
+      tag_id: t.tag_id,
+      name: t.name,
+      type: "urn:tag",
+      subtype: t.subtype,
+      entity_id: t.tag_id,
+      popularity: r3(0.3 + hash01(t.tag_id) * 0.6),
+      ...extra,
+      query: q,
+    });
+    const rows = TAG_POOL.map((t, i) => ({ t, x: va[i]! / maxA, y: vb[i]! / maxB }));
+    const shared = [...rows]
+      .sort((p, q) => Math.min(q.x, q.y) - Math.min(p.x, p.y))
+      .slice(0, limit)
+      .map(({ t, x, y }) => tag(t, {}, { score: r3(clamp(0.5 + 0.49 * Math.min(x, y), 0, 0.99)), "a.signal.interests.entities": aIds, "b.signal.interests.entities": bIds }));
+    const side = (key: "x" | "y") =>
+      [...rows]
+        .sort((p, q) => q[key] - p[key])
+        .slice(0, limit)
+        .map((r) => tag(r.t, {}, { count: Math.max(1, Math.round(r[key] * 40)) }));
     return envelope("compare_audiences", "ok", {
       interpretation: { group_a: ga.resolved, group_b: gb.resolved, target_type: query["filter.type"] },
-      results,
+      results: { tags: shared, a: side("x"), b: side("y"), matchEntities: [] },
       provenance: prov("/v2/analysis/compare", "analysis-compare", [req("/v2/analysis/compare", query)]),
     });
   }
 
-  /** Weekly synthetic popularity series with a per-entity slope (momentum). */
+  /**
+   * Trends in the layout seen live on Oct 22: series[].points are weekly,
+   * newest first, capped by `limit`, with population_rank as a string. Like
+   * the live API, data lags: weeks after `today - TRENDS_LAG_DAYS` have no
+   * points, so a window ending today comes back with points: [].
+   */
   #trends(a: QlooToolInputs["qloo_trends"]): QlooEnvelope {
     const r = this.#resolveMany(a.entities, "entities", a.entity_type);
     if (r.issues.length) return envelope("trends", "needs_input", { summary: "Choose or correct the unresolved Qloo entities.", resolution: { issues: r.issues } });
+    const day = 86_400_000;
     const start = Date.parse(`${a.start_date}T00:00:00Z`);
-    const end = Date.parse(`${a.end_date}T00:00:00Z`);
+    const lastData = this.#today.getTime() - TRENDS_LAG_DAYS * day;
+    const end = Math.min(Date.parse(`${a.end_date}T00:00:00Z`), lastData);
     const limit = a.limit ?? 10;
-    const weeks = Math.max(2, Math.min(limit, Math.floor((end - start) / (7 * 86_400_000)) + 1));
     const series = r.resolved.map((e) => {
-      const slope = (hash01(`${e.entityId}|slope`) - 0.5) * 0.5;
-      const base = 0.45 + hash01(`${e.entityId}|base`) * 0.3;
-      const points = Array.from({ length: weeks }, (_, i) => {
-        const t = i / (weeks - 1);
-        const pct = clamp(base + slope * t + (hash01(`${e.entityId}|n${i}`) - 0.5) * 0.02, 0.01, 0.99);
-        return {
-          date: new Date(start + Math.round(t * (end - start))).toISOString().slice(0, 10),
+      const slope = (hash01(`${e.entityId}|slope`) - 0.5) * 0.0006; // percentile change per day
+      const base = 0.6 + hash01(`${e.entityId}|base`) * 0.35;
+      const points: Array<Record<string, unknown>> = [];
+      for (let t = end, i = 0; t >= start && points.length < limit; t -= 7 * day, i += 1) {
+        const pct = clamp(base + slope * ((t - lastData) / day), 0.01, 0.999);
+        const prev = clamp(base + slope * ((t - 7 * day - lastData) / day), 0.01, 0.999);
+        const rank = Math.round((1 - pct) * 50_000) + 1;
+        const prevRank = Math.round((1 - prev) * 50_000) + 1;
+        points.push({
+          date: new Date(t).toISOString().slice(0, 10),
           population_percentile: r3(pct),
-          population_rank: Math.round((1 - pct) * 5000) + 1,
-        };
-      });
-      return { entity: { input: e.input, entityId: e.entityId, name: e.name, match: e.match }, points };
+          population_rank: String(rank),
+          population_rank_velocity: prevRank - rank,
+          velocity_fold_change: r3(prev > 0 ? pct / prev : 1),
+          population_percent_delta: r3(prev > 0 ? (pct - prev) / prev : 0),
+        });
+      }
+      return { entity: { input: e.input, entityId: e.entityId, name: e.name, type: TYPE_URN[a.entity_type], match: "identifier" }, points };
     });
     return envelope("trends", "ok", {
       interpretation: { entity_type: TYPE_URN[a.entity_type], start_date: a.start_date, end_date: a.end_date },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Choice, CompareRow, SponsorEvent, SponsorResult } from "@/lib/optimizer/types";
+import type { Choice, SponsorEvent, SponsorResult } from "@/lib/optimizer/types";
 import { score, signed, usd } from "./format";
 import { CallList, ChoiceList } from "./Shared";
 import { readNdjson } from "./stream";
@@ -21,13 +21,6 @@ const EXAMPLE = {
 };
 
 type Step = Extract<SponsorEvent, { type: "step" }>;
-
-function sharedRows(rows: CompareRow[]): CompareRow[] {
-  return rows
-    .filter((r) => r.a !== undefined && r.b !== undefined)
-    .sort((x, y) => Math.min(y.a!, y.b!) - Math.min(x.a!, x.b!))
-    .slice(0, 6);
-}
 
 export function SponsorView({ qlooMode, autorun = false }: { qlooMode: "live" | "mock"; autorun?: boolean }) {
   const [form, setForm] = useState(EXAMPLE[qlooMode]);
@@ -164,16 +157,19 @@ export function SponsorView({ qlooMode, autorun = false }: { qlooMode: "live" | 
               <section className="panel final">
                 <h2>Best fit: {result.recommendation.eventName}</h2>
                 <p>{result.recommendation.reason}</p>
-                {result.sharedTastes?.layout === "parsed" && sharedRows(result.sharedTastes.rows).length > 0 ? (
+                {result.sharedTastes?.layout === "parsed" ? (
                   <div>
                     <h4>Tastes {result.brand.name}&apos;s audience shares with this lineup</h4>
                     <div className="chips">
-                      {sharedRows(result.sharedTastes.rows).map((r) => (
-                        <span key={r.id} className="chip strong" title={`brand ${score(r.a)} / lineup ${score(r.b)}`}>
-                          {r.name} <span className="chip-score">{score(Math.min(r.a!, r.b!))}</span>
+                      {result.sharedTastes.shared.slice(0, 6).map((t) => (
+                        <span key={t.id} className="chip strong" title="similarity score from qloo_compare_audiences">
+                          {t.name} <span className="chip-score">{score(t.score)}</span>
                         </span>
                       ))}
                     </div>
+                    {result.sharedTastes.onlyB.length > 0 && (
+                      <p className="small">Only on the event side: {result.sharedTastes.onlyB.slice(0, 4).map((t) => t.name).join(", ")}</p>
+                    )}
                     <p className="small muted">qloo_compare_audiences: your brand vs. the event&apos;s acts and venue, in one request.</p>
                   </div>
                 ) : result.sharedTastes ? (
@@ -222,7 +218,7 @@ export function SponsorView({ qlooMode, autorun = false }: { qlooMode: "live" | 
             </div>
             <p className="footnote">
               {result.toolCallCount} Qloo MCP tool calls. Score = 75% mean act affinity + 25% venue affinity for {result.brand.name}&apos;s audience (one
-              qloo_rank scale); index 100 = the average of the events you pasted. Chip numbers are affinities; percentages are 90-day momentum from
+              qloo_rank scale); index 100 = the average of the events you pasted. Chip numbers are affinities; percentages are 20-week momentum (window ending about four months ago, since trend data lags) from
               qloo_trends. Affinity describes aggregate taste associations, not attendance or sales.
             </p>
           </>

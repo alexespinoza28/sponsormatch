@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { GOAL_LABELS } from "@/lib/optimizer/scoring";
-import type { Choice, Goal, HeadToHead, IterationEvent, LineupScore, OptimizeResult, OptimizerEvent, SetupEvent } from "@/lib/optimizer/types";
+import type { Choice, ComparableCheck, Goal, IterationEvent, LineupScore, OptimizeResult, OptimizerEvent, SetupEvent, TasteOverlap } from "@/lib/optimizer/types";
 import { pct, score, signed } from "./format";
 import { ScoreChart, type ChartPoint } from "./ScoreChart";
 import { BudgetMeter, CallList, ChoiceList } from "./Shared";
@@ -48,19 +48,32 @@ function Parts({ s }: { s: LineupScore }) {
   );
 }
 
-function H2H({ h }: { h: HeadToHead }) {
-  if (h.layout !== "parsed") return <p className="small muted">Head-to-head (qloo_compare_audiences): {h.note ?? h.layout}</p>;
+function Tastes({ t, a, b }: { t: TasteOverlap; a: string; b: string }) {
+  if (t.layout !== "parsed") return <p className="small muted">Taste overlap (qloo_compare_audiences): {t.note ?? t.layout}</p>;
+  return (
+    <div className="small tastes">
+      <div>
+        Shared tastes{t.meanScore !== undefined ? <span className="muted"> (mean similarity {score(t.meanScore)})</span> : null}:{" "}
+        {t.shared.slice(0, 4).map((x) => `${x.name} ${score(x.score)}`).join(", ")}
+      </div>
+      {t.onlyB.length > 0 && (
+        <div>
+          Only in {b}: {t.onlyB.slice(0, 4).map((x) => x.name).join(", ")}
+        </div>
+      )}
+      {t.onlyA.length > 0 && (
+        <div className="muted">
+          Only in {a}: {t.onlyA.slice(0, 4).map((x) => x.name).join(", ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Comparable({ c }: { c: ComparableCheck }) {
   return (
     <p className="small">
-      Head-to-head (qloo_compare_audiences, one request):{" "}
-      {h.targetLean !== undefined ? (
-        <>
-          target brands lean <strong>{signed(h.targetLean, 3)}</strong> toward the {h.targetLean >= 0 ? "new" : "current"} lineup
-        </>
-      ) : (
-        "target brands not among the rows"
-      )}
-      {h.topGainers.length ? `; biggest gainers: ${h.topGainers.map((g) => `${g.name} ${signed(g.delta ?? 0, 3)}`).join(", ")}` : ""}.
+      <span className="lbl">Same-scale check</span> {c.note}
     </p>
   );
 }
@@ -102,7 +115,8 @@ function TraceItem({ it, current }: { it: IterationEvent; current?: number }) {
             ) : (
               <span className="muted">none returned</span>
             )}
-            {it.headToHead && <H2H h={it.headToHead} />}
+            {it.comparable && <Comparable c={it.comparable} />}
+            {it.tasteOverlap && <Tastes t={it.tasteOverlap} a="the previous bill" b="the new bill" />}
           </div>
         )}
         {it.phase === "decision" && (
@@ -150,7 +164,7 @@ function FinalCard({ r }: { r: OptimizeResult }) {
               <span className="small muted">
                 {" "}
                 brand-audience affinity {score(a.brandAffinity)}
-                {a.momentum ? ` · momentum ${signed(a.momentum.value * 100, 0)}% (${a.momentum.metric})` : ""}
+                {a.momentum ? ` · momentum ${signed(a.momentum.value * 100, 0)}% (${a.momentum.metric})` : " · no recent trend data"}
               </span>
             </li>
           );
@@ -172,10 +186,11 @@ function FinalCard({ r }: { r: OptimizeResult }) {
             </div>
           );
         })}
-        {r.finalHeadToHead && (
+        {r.finalTasteShift && (
           <div className="ev-card">
-            <h4>Draft vs. recommended, head-to-head</h4>
-            <H2H h={r.finalHeadToHead} />
+            <h4>How the audience changes vs. your draft</h4>
+            <Tastes t={r.finalTasteShift} a="your draft" b="the recommended bill" />
+            <p className="small muted">qloo_compare_audiences, draft vs. recommended, one request.</p>
           </div>
         )}
         {r.cohesionPairs.length > 0 && (

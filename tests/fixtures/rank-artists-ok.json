@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "rank",
+  "status": "ok",
+  "interpretation": {
+    "option_type": "urn:entity:artist",
+    "options": [
+      {
+        "input": "The Fixture Tones",
+        "entityId": "0A1B2C3D-0000-4000-A000-000000000001",
+        "name": "The Fixture Tones",
+        "type": "urn:entity:artist",
+        "match": "exact"
+      },
+      {
+        "input": "Fixture Revival",
+        "entityId": "0A1B2C3D-0000-4000-A000-000000000002",
+        "name": "Fixture Revival",
+        "type": "urn:entity:artist",
+        "match": "exact"
+      },
+      {
+        "input": "Testcase Choir",
+        "entityId": "0A1B2C3D-0000-4000-A000-000000000004",
+        "name": "Testcase Choir",
+        "type": "urn:entity:artist",
+        "match": "exact"
+      }
+    ],
+    "signals": [
+      {
+        "input": "B0000000-0000-4000-A000-000000000001",
+        "entityId": "B0000000-0000-4000-A000-000000000001",
+        "name": "Testbrand Coffee",
+        "match": "identifier"
+      }
+    ]
+  },
+  "results": [
+    {
+      "entity_id": "0A1B2C3D-0000-4000-A000-000000000001",
+      "name": "The Fixture Tones",
+      "type": "urn:entity",
+      "subtype": "urn:entity:artist",
+      "popularity": 0.97,
+      "affinity": 0.734,
+      "properties": {
+        "short_description": "Synthetic artist"
+      }
+    },
+    {
+      "entity_id": "0A1B2C3D-0000-4000-A000-000000000002",
+      "name": "Fixture Revival",
+      "type": "urn:entity",
+      "subtype": "urn:entity:artist",
+      "popularity": 0.93,
+      "affinity": 0.701,
+      "properties": {
+        "short_description": "Synthetic artist"
+      }
+    },
+    {
+      "entity_id": "0A1B2C3D-0000-4000-A000-000000000004",
+      "name": "Testcase Choir",
+      "type": "urn:entity",
+      "subtype": "urn:entity:artist",
+      "popularity": 0.88,
+      "affinity": 0.655,
+      "properties": {
+        "short_description": "Synthetic artist"
+      }
+    }
+  ],
+  "result_count": 3,
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-rank-artists",
+    "duration_ms": 12
+  },
+  "provenance": {
+    "source": "Qloo API",
+    "endpoint": "/v2/insights",
+    "documentation": "https://docs.qloo.com/reference/insights-api-deep-dive",
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/v2/insights",
+        "query": {
+          "filter.type": "urn:entity:artist",
+          "filter.results.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000001",
+            "0A1B2C3D-0000-4000-A000-000000000002",
+            "0A1B2C3D-0000-4000-A000-000000000004"
+          ],
+          "signal.interests.entities": [
+            "B0000000-0000-4000-A000-000000000001"
+          ],
+          "take": 3
+        }
+      }
+    ]
+  }
+}

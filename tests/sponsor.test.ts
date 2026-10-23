@@ -15,7 +15,7 @@ const EVENTS = [
 async function run(raw: Record<string, unknown>) {
   const input = validateSponsorInput(raw);
   const log = new CallLog();
-  const qloo = new BudgetedQloo(new MockQlooTools({ onCall: log.push }), SPONSOR_CALL_CAP);
+  const qloo = new BudgetedQloo(new MockQlooTools({ onCall: log.push, today: new Date("2026-10-22T12:00:00Z") }), SPONSOR_CALL_CAP);
   const events: SponsorEvent[] = [];
   const result = await runSponsorRanking(input, { qloo, log, emit: (e) => events.push(e), now: new Date("2026-10-22T12:00:00Z") });
   return { result, events, qloo };

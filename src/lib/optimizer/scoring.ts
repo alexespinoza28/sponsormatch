@@ -77,10 +77,15 @@ export function cohesion(acts: ActProfile[]): number | undefined {
   return round(sum / n);
 }
 
-/** Mean act momentum mapped from [-1, 1] to [0, 1], or undefined if no act has a trend. */
-export function lineupMomentum(acts: ActProfile[]): number | undefined {
-  const values = acts.flatMap((a) => (a.momentum ? [a.momentum.value] : []));
-  if (!values.length) return undefined;
+/**
+ * Mean act momentum mapped from [-1, 1] to [0, 1]. With `neutralMissing`
+ * (some candidate act has trend data), an act without trend points counts as
+ * flat (0) so a swap is neither helped nor blocked by missing data; otherwise
+ * undefined when no act on the bill has a trend.
+ */
+export function lineupMomentum(acts: ActProfile[], neutralMissing = false): number | undefined {
+  const values = acts.flatMap((a) => (a.momentum ? [a.momentum.value] : neutralMissing ? [0] : []));
+  if (!values.length || (!neutralMissing && !acts.some((a) => a.momentum))) return undefined;
   const mean = values.reduce((s, v) => s + v, 0) / values.length;
   return round((clamp(mean, -1, 1) + 1) / 2);
 }
@@ -106,10 +111,13 @@ export function pctChange(before: number, after: number): number {
 }
 
 /**
- * Momentum from a qloo_trends series. Uses the first numeric field it finds
- * among the known Qloo trending fields. For rank fields lower is better, so
- * the sign is flipped. Compares the mean of the first and last third of the
- * window to smooth weekly noise. Returns undefined with fewer than 2 points.
+ * Momentum from a qloo_trends series (live points: date,
+ * population_percentile 0..1, population_rank as a string, velocities; newest
+ * first). Sorts by date, uses population_percentile when present, else
+ * population_rank (lower is better, so the sign flips). Compares the mean of
+ * the first and last third of the window to smooth weekly noise. Returns
+ * undefined with fewer than 2 points (e.g. the empty series Qloo returns for
+ * recent windows).
  */
 const TREND_FIELDS: Array<{ key: string; lowerIsBetter: boolean }> = [
   { key: "population_percentile", lowerIsBetter: false },
@@ -124,7 +132,9 @@ function numberAt(point: unknown, key: string): number | undefined {
   if (!point || typeof point !== "object") return undefined;
   const p = point as Record<string, unknown>;
   const v = p[key] ?? (p.query && typeof p.query === "object" ? (p.query as Record<string, unknown>)[key] : undefined);
-  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  // The live API returns population_rank as a string.
+  return typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : undefined;
 }
 
 export function momentumFromPoints(points: unknown[]): Momentum | undefined {
@@ -153,7 +163,8 @@ export function scoreLineup(args: {
   evidenceId: string;
 }): LineupScore {
   const members = args.lineup.acts.map((id) => args.acts.find((a) => a.entity.id === id)).filter((a): a is ActProfile => !!a);
-  const parts: ObjectiveParts = { fit: brandFit(args.brands, args.primaryId), cohesion: cohesion(members), momentum: lineupMomentum(members) };
+  const neutral = args.acts.some((a) => a.momentum);
+  const parts: ObjectiveParts = { fit: brandFit(args.brands, args.primaryId), cohesion: cohesion(members), momentum: lineupMomentum(members, neutral) };
   return {
     key: lineupKey(args.lineup),
     lineup: args.lineup,
@@ -174,5 +185,5 @@ export function priorObjective(args: { lineup: Lineup; acts: ActProfile[]; slotA
   const vals = members.flatMap((m) => (m.brandAffinity !== undefined ? [m.brandAffinity] : []));
   const actPart = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
   const fit = args.slotAffinity !== undefined ? 0.8 * actPart + 0.2 * args.slotAffinity : actPart;
-  return objective({ fit, cohesion: cohesion(members), momentum: lineupMomentum(members) }, args.goal);
+  return objective({ fit, cohesion: cohesion(members), momentum: lineupMomentum(members, args.acts.some((a) => a.momentum)) }, args.goal);
 }

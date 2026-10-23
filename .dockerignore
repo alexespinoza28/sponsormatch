@@ -8,3 +8,4 @@ RESOURCES.md
 coverage
 *.log
 .vercel
+docs/screenshot*.png

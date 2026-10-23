@@ -32,12 +32,12 @@ export class NvidiaError extends Error {
   }
 }
 
-export function buildChatBody(model: string, messages: ChatMessage[], maxTokens = 400) {
+export function buildChatBody(model: string, messages: ChatMessage[], maxTokens = 400, temperature = 0.3) {
   return {
     model,
     messages,
-    // Low-ish temperature: pitches must stay close to the given evidence.
-    temperature: 0.5,
+    // Low temperature: proposals must stay within the given state.
+    temperature,
     top_p: 0.9,
     max_tokens: maxTokens,
     stream: false,
@@ -50,6 +50,7 @@ export async function chatCompletion(options: {
   model: string;
   messages: ChatMessage[];
   maxTokens?: number;
+  temperature?: number;
   timeoutMs?: number;
   fetch?: typeof fetch;
 }): Promise<string> {
@@ -64,7 +65,7 @@ export async function chatCompletion(options: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify(buildChatBody(options.model, options.messages, options.maxTokens)),
+      body: JSON.stringify(buildChatBody(options.model, options.messages, options.maxTokens, options.temperature)),
       signal: controller.signal,
       cache: "no-store",
     });

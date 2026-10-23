@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "SponsorMatch",
   description:
-    "An agent that uses Qloo's taste graph to find the brands a local event's audience has affinity for, then drafts evidence-backed sponsor pitches.",
+    "A lineup-optimizing agent for event producers, and an event finder for sponsors, powered by Qloo's taste graph.",
 };
 
 export const viewport: Viewport = {

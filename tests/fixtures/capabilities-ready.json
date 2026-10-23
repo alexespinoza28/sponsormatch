@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "capabilities",
+  "status": "ok",
+  "contract_version": "1.0.0",
+  "adapter": {
+    "ready": true,
+    "supported_operation_ids": [
+      "recommend",
+      "rank",
+      "describe",
+      "where_popular",
+      "compare_audiences",
+      "entity_tags",
+      "audience_demographics",
+      "trends",
+      "find_tags"
+    ]
+  },
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-cap",
+    "duration_ms": 12
+  }
+}

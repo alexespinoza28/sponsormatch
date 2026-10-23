@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "recommend",
+  "status": "needs_input",
+  "summary": "Choose or correct the unresolved Qloo inputs.",
+  "resolution": {
+    "issues": [
+      {
+        "input": "The Fixture Tones",
+        "kind": "ambiguous",
+        "input_kind": "entity",
+        "field": "signals",
+        "candidates": [
+          {
+            "id": "0A1B2C3D-0000-4000-A000-000000000001",
+            "type": "urn:entity:artist",
+            "name": "The Fixture Tones",
+            "popularity": 0.912
+          },
+          {
+            "id": "0A1B2C3D-0000-4000-A000-0000000000F1",
+            "type": "urn:entity:person",
+            "name": "The Fixture Tones",
+            "popularity": 0.204
+          }
+        ]
+      }
+    ]
+  },
+  "results": [],
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-ni",
+    "duration_ms": 12
+  }
+}

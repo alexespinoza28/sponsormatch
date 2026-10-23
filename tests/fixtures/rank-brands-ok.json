@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "rank",
+  "status": "ok",
+  "interpretation": {
+    "option_type": "urn:entity:brand",
+    "options": [
+      {
+        "input": "B0000000-0000-4000-A000-000000000001",
+        "entityId": "B0000000-0000-4000-A000-000000000001",
+        "name": "Testbrand Coffee",
+        "match": "identifier"
+      },
+      {
+        "input": "B0000000-0000-4000-A000-000000000002",
+        "entityId": "B0000000-0000-4000-A000-000000000002",
+        "name": "Testbrand Motors",
+        "match": "identifier"
+      }
+    ],
+    "signals": [
+      {
+        "input": "0A1B2C3D-0000-4000-A000-000000000001",
+        "entityId": "0A1B2C3D-0000-4000-A000-000000000001",
+        "name": "The Fixture Tones",
+        "match": "identifier"
+      },
+      {
+        "input": "0A1B2C3D-0000-4000-A000-000000000002",
+        "entityId": "0A1B2C3D-0000-4000-A000-000000000002",
+        "name": "Fixture Revival",
+        "match": "identifier"
+      }
+    ]
+  },
+  "results": [
+    {
+      "entity_id": "B0000000-0000-4000-A000-000000000002",
+      "name": "Testbrand Motors",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "popularity": 0.88,
+      "affinity": 0.712
+    },
+    {
+      "entity_id": "B0000000-0000-4000-A000-000000000001",
+      "name": "Testbrand Coffee",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "popularity": 0.71,
+      "affinity": 0.648
+    }
+  ],
+  "result_count": 2,
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-rank",
+    "duration_ms": 12
+  },
+  "provenance": {
+    "source": "Qloo API",
+    "endpoint": "/v2/insights",
+    "documentation": "https://docs.qloo.com/reference/insights-api-deep-dive",
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/v2/insights",
+        "query": {
+          "filter.type": "urn:entity:brand",
+          "filter.results.entities": [
+            "B0000000-0000-4000-A000-000000000001",
+            "B0000000-0000-4000-A000-000000000002"
+          ],
+          "signal.interests.entities": [
+            "0A1B2C3D-0000-4000-A000-000000000001",
+            "0A1B2C3D-0000-4000-A000-000000000002"
+          ],
+          "signal.location.query": "Los Angeles",
+          "take": 2
+        }
+      }
+    ]
+  }
+}

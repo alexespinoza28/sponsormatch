@@ -2,7 +2,7 @@
   "name": "sponsormatch",
   "version": "0.1.0",
   "private": true,
-  "description": "An agent that uses Qloo's taste graph (through the official qloo mcp harness) to find brands a local event's audience has affinity for, then drafts evidence-backed sponsor pitches.",
+  "description": "A lineup-optimizing agent for event producers, and an event finder for sponsors, powered by Qloo's taste graph through the official qloo mcp harness.",
   "license": "MIT",
   "engines": {
     "node": ">=22.19.0"

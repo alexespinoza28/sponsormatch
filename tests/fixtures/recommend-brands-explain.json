@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "recommend",
+  "status": "ok",
+  "results": [
+    {
+      "entity_id": "B0000000-0000-4000-A000-000000000003",
+      "name": "Testbrand Cider",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "popularity": 0.42,
+      "affinity": 0.861,
+      "explainability": {
+        "signal.interests.entities": [
+          {
+            "entity_id": "0A1B2C3D-0000-4000-A000-000000000001",
+            "score": 1
+          }
+        ]
+      },
+      "properties": {
+        "short_description": "Synthetic brand"
+      }
+    },
+    {
+      "entity_id": "B0000000-0000-4000-A000-000000000001",
+      "name": "Testbrand Coffee",
+      "type": "urn:entity",
+      "subtype": "urn:entity:brand",
+      "popularity": 0.71,
+      "affinity": 0.802,
+      "explainability": {
+        "signal.interests.entities": [
+          {
+            "entity_id": "0A1B2C3D-0000-4000-A000-000000000001",
+            "score": 0.7
+          },
+          {
+            "entity_id": "0A1B2C3D-0000-4000-A000-000000000002",
+            "score": 0.3
+          }
+        ]
+      },
+      "properties": {
+        "short_description": "Synthetic brand"
+      }
+    }
+  ],
+  "result_count": 2,
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-rec",
+    "duration_ms": 12
+  }
+}

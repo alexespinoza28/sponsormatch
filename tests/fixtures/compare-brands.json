@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0-preview.1",
+  "operation": "compare_audiences",
+  "status": "ok",
+  "_note": "Layout assumed (the harness passes /v2/analysis/compare results through unchanged); verify against the live API.",
+  "interpretation": {
+    "group_a": [
+      {
+        "input": "0A1B2C3D-0000-4000-A000-000000000001",
+        "entityId": "0A1B2C3D-0000-4000-A000-000000000001",
+        "name": "The Fixture Tones",
+        "match": "identifier"
+      }
+    ],
+    "group_b": [
+      {
+        "input": "0A1B2C3D-0000-4000-A000-000000000002",
+        "entityId": "0A1B2C3D-0000-4000-A000-000000000002",
+        "name": "Fixture Revival",
+        "match": "identifier"
+      }
+    ],
+    "target_type": "urn:entity:brand"
+  },
+  "results": {
+    "entities": [
+      {
+        "entity_id": "B0000000-0000-4000-A000-000000000001",
+        "name": "Testbrand Coffee",
+        "subtype": "urn:entity:brand",
+        "query": {
+          "a": {
+            "affinity": 0.61
+          },
+          "b": {
+            "affinity": 0.67
+          }
+        }
+      },
+      {
+        "entity_id": "B0000000-0000-4000-A000-000000000002",
+        "name": "Testbrand Motors",
+        "subtype": "urn:entity:brand",
+        "query": {
+          "a": {
+            "affinity": 0.7
+          },
+          "b": {
+            "affinity": 0.66
+          }
+        }
+      },
+      {
+        "entity_id": "B0000000-0000-4000-A000-000000000003",
+        "name": "Testbrand Cider",
+        "subtype": "urn:entity:brand",
+        "query": {
+          "a": {
+            "affinity": 0.4
+          },
+          "b": {
+            "affinity": 0.55
+          }
+        }
+      }
+    ]
+  },
+  "execution": {
+    "transport": "mcp",
+    "transport_name": "Qloo canonical MCP",
+    "correlation_id": "test-cmp",
+    "duration_ms": 12
+  }
+}

@@ -25,3 +25,7 @@ coverage/
 .DS_Store
 *.log
 npm-debug.log*
+
+# written by `next dev` (agent hints for Next.js 16); not part of the app
+AGENTS.md
+CLAUDE.md

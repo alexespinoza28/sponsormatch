@@ -1,5 +1,5 @@
 {
-  "_note": "SYNTHETIC FIXTURE DATA for SponsorMatch mock mode. Every brand, ID, score and place here is invented; none of it is Qloo data. Shapes follow the public Qloo docs (results.entities[] with name, entity_id, type, subtype, properties, popularity, tags[]; results.tags[] with tag_id, name, types, subtype, tag_value).",
+  "_note": "SYNTHETIC FIXTURE DATA for SponsorMatch mock mode. Every brand, ID, score and place here is invented; none of it is Qloo data. Shapes follow the public Qloo docs (results.entities[] with name, entity_id, type, subtype, properties, popularity, tags[]; results.tags[] with tag_id, name, types, subtype, tag_value). tasteTags are synthetic genre/keyword tags used for the mock's act taste profiles.",
   "brands": [
     {
       "name": "Tidewater Cold Brew",
@@ -1175,5 +1175,87 @@
     "Mission St",
     "Cabrillo Blvd",
     "Anacapa St"
+  ],
+  "tasteTags": [
+    {
+      "tag_id": "urn:tag:genre:qloo:psychedelic_rock",
+      "name": "Psychedelic Rock",
+      "subtype": "urn:tag:genre:qloo"
+    },
+    {
+      "tag_id": "urn:tag:genre:qloo:soul",
+      "name": "Soul",
+      "subtype": "urn:tag:genre:qloo"
+    },
+    {
+      "tag_id": "urn:tag:genre:qloo:dream_pop",
+      "name": "Dream Pop",
+      "subtype": "urn:tag:genre:qloo"
+    },
+    {
+      "tag_id": "urn:tag:genre:qloo:desert_blues",
+      "name": "Desert Blues",
+      "subtype": "urn:tag:genre:qloo"
+    },
+    {
+      "tag_id": "urn:tag:genre:qloo:surf_rock",
+      "name": "Surf Rock",
+      "subtype": "urn:tag:genre:qloo"
+    },
+    {
+      "tag_id": "urn:tag:genre:qloo:indie_folk",
+      "name": "Indie Folk",
+      "subtype": "urn:tag:genre:qloo"
+    },
+    {
+      "tag_id": "urn:tag:genre:qloo:neo_soul",
+      "name": "Neo-Soul",
+      "subtype": "urn:tag:genre:qloo"
+    },
+    {
+      "tag_id": "urn:tag:genre:qloo:instrumental",
+      "name": "Instrumental",
+      "subtype": "urn:tag:genre:qloo"
+    },
+    {
+      "tag_id": "urn:tag:keyword:qloo:vinyl_collecting",
+      "name": "Vinyl Collecting",
+      "subtype": "urn:tag:keyword:qloo"
+    },
+    {
+      "tag_id": "urn:tag:keyword:qloo:road_trips",
+      "name": "Road Trips",
+      "subtype": "urn:tag:keyword:qloo"
+    },
+    {
+      "tag_id": "urn:tag:keyword:qloo:beach_culture",
+      "name": "Beach Culture",
+      "subtype": "urn:tag:keyword:qloo"
+    },
+    {
+      "tag_id": "urn:tag:keyword:qloo:craft_coffee",
+      "name": "Craft Coffee",
+      "subtype": "urn:tag:keyword:qloo"
+    },
+    {
+      "tag_id": "urn:tag:keyword:qloo:festival_going",
+      "name": "Festival Going",
+      "subtype": "urn:tag:keyword:qloo"
+    },
+    {
+      "tag_id": "urn:tag:keyword:qloo:thrifting",
+      "name": "Thrifting",
+      "subtype": "urn:tag:keyword:qloo"
+    },
+    {
+      "tag_id": "urn:tag:keyword:qloo:late_night",
+      "name": "Late Night",
+      "subtype": "urn:tag:keyword:qloo"
+    },
+    {
+      "tag_id": "urn:tag:keyword:qloo:wellness",
+      "name": "Wellness",
+      "subtype": "urn:tag:keyword:qloo"
+    }
   ]
 }
